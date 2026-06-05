@@ -1,0 +1,48 @@
+// Global Veriscope styles
+
+body {
+  background: #0d1117;
+}
+
+.vs-card {
+  background: #111827;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+}
+
+.vs-table {
+  background: transparent;
+
+  .q-table__top,
+  .q-table__bottom,
+  thead tr:first-child th {
+    background: #0f172a;
+  }
+
+  thead th {
+    color: #64748b;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  tbody tr {
+    cursor: pointer;
+
+    &:hover td {
+      background: rgba(34, 211, 238, 0.04);
+    }
+
+    td {
+      color: #e2e8f0;
+      border-bottom: 1px solid #1e293b;
+    }
+  }
+}
+
+// Monospace for sensitive data
+.font-mono {
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
