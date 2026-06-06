@@ -8,21 +8,24 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import CreditReport
+from .models import CreditReport, MonitoringBatch
 from .serializers import CreditReportSerializer, ReportUploadSerializer
 from .services import parse_report, handle_zip_upload
 
 
 class CreditReportViewSet(viewsets.ModelViewSet):
-    queryset = CreditReport.objects.select_related('case').all()
+    queryset = CreditReport.objects.select_related('identity').all()
     serializer_class = CreditReportSerializer
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         qs = super().get_queryset()
-        case_id = self.request.query_params.get('case')
-        if case_id:
-            qs = qs.filter(case_id=case_id)
+        identity_id = self.request.query_params.get('identity')
+        unmatched = self.request.query_params.get('unmatched')
+        if identity_id:
+            qs = qs.filter(identity_id=identity_id)
+        if unmatched == '1':
+            qs = qs.filter(identity__isnull=True)
         return qs
 
     @action(detail=False, methods=['post'], url_path='upload')
@@ -31,17 +34,7 @@ class CreditReportViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         uploaded_file = serializer.validated_data['file']
-        case_id = serializer.validated_data.get('case')
         auto_parse = serializer.validated_data.get('auto_parse', True)
-
-        case = None
-        if case_id:
-            from cases.models import Case
-            try:
-                case = Case.objects.get(pk=case_id)
-            except Case.DoesNotExist:
-                return Response({'detail': 'Case not found.'}, status=status.HTTP_404_NOT_FOUND)
-
         filename = uploaded_file.name.lower()
         created_reports = []
 
@@ -51,14 +44,11 @@ class CreditReportViewSet(viewsets.ModelViewSet):
                     tmp.write(chunk)
                 tmp_path = tmp.name
             try:
-                created_reports = handle_zip_upload(tmp_path, case=case)
+                created_reports = handle_zip_upload(tmp_path)
             finally:
                 os.unlink(tmp_path)
         elif filename.endswith('.pdf'):
-            report = CreditReport(
-                original_filename=uploaded_file.name,
-                case=case,
-            )
+            report = CreditReport(original_filename=uploaded_file.name)
             report.file.save(uploaded_file.name, uploaded_file, save=True)
             created_reports = [report]
         else:
@@ -67,13 +57,25 @@ class CreditReportViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Assign all reports in this upload to today's monitoring batch
+        from datetime import date
+        batch, _ = MonitoringBatch.objects.get_or_create(
+            run_date=date.today(),
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+        for report in created_reports:
+            report.batch = batch
+            report.save(update_fields=['batch'])
+
         if auto_parse:
+            from identities.services import auto_match_and_compare
             for report in created_reports:
                 try:
                     extracted = parse_report(report)
                     _save_extracted_data(report, extracted)
+                    auto_match_and_compare(report)
                 except Exception:
-                    pass  # status already set to 'failed' by parse_report
+                    pass
 
         out = CreditReportSerializer(created_reports, many=True, context={'request': request})
         return Response(out.data, status=status.HTTP_201_CREATED)
@@ -84,17 +86,17 @@ class CreditReportViewSet(viewsets.ModelViewSet):
         if report.status == 'parsing':
             return Response({'detail': 'Already parsing.'}, status=status.HTTP_409_CONFLICT)
         try:
+            from identities.services import auto_match_and_compare
             extracted = parse_report(report)
             _save_extracted_data(report, extracted)
+            auto_match_and_compare(report)
         except Exception as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        serializer = self.get_serializer(report)
-        return Response(serializer.data)
+        return Response(self.get_serializer(report).data)
 
 
 def _save_extracted_data(report: CreditReport, extracted: dict):
-    """Persist extracted subject data to the database."""
     from entities.models import Subject, AlternateName, Address, FinancialAccount
 
     subject, _ = Subject.objects.get_or_create(report=report)

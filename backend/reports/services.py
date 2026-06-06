@@ -59,21 +59,25 @@ def extract_name(text: str) -> str:
 def extract_ssn(text: str) -> tuple[str, str]:
     """Return (full_or_masked_ssn, last_four). Common credit reports mask SSN."""
     patterns = [
-        r'\b(\d{3}-\d{2}-\d{4})\b',
-        r'\b(XXX-XX-(\d{4}))\b',
-        r'\b(\d{3}-XX-(\d{4}))\b',
-        r'(?:SSN|Social Security)[^\d]*(\d{3}-\d{2}-\d{4}|\d{9})',
-        r'(?:SSN|Social Security)[^\d]*(?:XXX-XX-(\d{4})|xxx-xx-(\d{4}))',
+        # Full 9-digit SSN
+        (r'\b(\d{3}-\d{2}-(\d{4}))\b', 1, 2),
+        (r'(?:SSN|Social Security)[^\d]*(\d{3}-\d{2}-(\d{4}))', 1, 2),
+        # Experian-style: XXX-XX-####
+        (r'\b(XXX-XX-(\d{4}))\b', 1, 2),
+        (r'(?:SSN|Social Security)[^\d]*XXX-XX-(\d{4})', None, 1),
+        # TransUnion-style: ###-##-####
+        (r'\b(###-##-(\d{4}))\b', 1, 2),
+        (r'(?:SSN|Social Security)[^\d]*###-##-(\d{4})', None, 1),
+        # Partial digit masking
+        (r'\b(\d{3}-XX-(\d{4}))\b', 1, 2),
     ]
-    for pattern in patterns:
+    for pattern, full_group, last4_group in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            full = match.group(1) if match.lastindex and match.group(1) else ''
-            last_four = ''
-            if match.lastindex and match.lastindex >= 2:
-                last_four = match.group(2) or ''
-            elif full and len(full) >= 4:
-                last_four = full[-4:]
+            full = match.group(full_group) if full_group and match.lastindex >= full_group else ''
+            last_four = match.group(last4_group) if last4_group and match.lastindex >= last4_group else ''
+            if not last_four and full:
+                last_four = re.sub(r'\D', '', full)[-4:]
             return full, last_four
     return '', ''
 
@@ -114,21 +118,26 @@ def extract_alternate_names(text: str) -> list[str]:
 
 def extract_addresses(text: str) -> list[dict]:
     """
-    Extracts address blocks. Handles common formats:
+    Extracts address blocks from single-line address format:
     123 Main St, Springfield, IL 62701
-    123 Main St
-    Springfield, IL  62701
     """
     addresses = []
-    # Pattern for full inline address
-    inline_pattern = r'(\d+\s+[A-Za-z0-9\s.#,-]+),\s*([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)'
+    # Restrict to single line — use [ \t] not \s to avoid newline spanning
+    inline_pattern = (
+        r'(\d+[ \t]+[A-Za-z0-9 \t.#,-]+?)'
+        r',[ \t]*([A-Za-z][A-Za-z \t]+?)'
+        r',[ \t]*([A-Z]{2})[ \t]+'
+        r'(\d{5}(?:-\d{4})?)'
+    )
     for match in re.finditer(inline_pattern, text):
-        addresses.append({
-            'street': match.group(1).strip(),
-            'city': match.group(2).strip(),
-            'state': match.group(3).strip(),
-            'zip_code': match.group(4).strip(),
-        })
+        street = match.group(1).strip()
+        city = match.group(2).strip()
+        state = match.group(3).strip()
+        zip_code = match.group(4).strip()
+        # Skip obvious false positives
+        if len(street) < 5 or len(city) < 2:
+            continue
+        addresses.append({'street': street, 'city': city, 'state': state, 'zip_code': zip_code})
 
     # Deduplicate by street
     seen = set()
@@ -143,31 +152,52 @@ def extract_addresses(text: str) -> list[dict]:
 
 def extract_accounts(text: str) -> list[dict]:
     """
-    Extracts financial account blocks. Looks for creditor name + balance patterns.
-    Credit reports vary wildly in formatting; this captures common patterns.
+    Extracts financial account blocks. Handles both labeled and table-row formats.
     """
     accounts = []
+    seen_creditors = set()
 
-    # Look for creditor blocks: "CREDITOR NAME\nAccount #: ...\nBalance: $..."
-    account_pattern = re.compile(
+    def _add(creditor, account_number, balance_raw):
+        creditor = creditor.strip()
+        if len(creditor) < 4:
+            return
+        if re.search(r'\b(address|employment|personal|summary|report|date|page|creditor|account|type|status|balance|limit|opened|history)\b', creditor, re.I):
+            return
+        key = re.sub(r'\s+', ' ', creditor.lower())
+        if key in seen_creditors:
+            return
+        seen_creditors.add(key)
+        accounts.append({
+            'creditor_name': creditor,
+            'account_number': (account_number or '').strip(),
+            'balance_raw': (balance_raw or '').strip(),
+        })
+
+    # Pattern 1 — table row: ALL_CAPS_CREDITOR MixedCaseType ****NNNN Status ...
+    # Stops the creditor match when a mixed-case word begins (e.g. "Credit Card")
+    table_row = re.compile(
+        r'^([A-Z][A-Z0-9\s&.,\-/]{3,50}?)(?=\s+[A-Z][a-z]|\s+\*{2})'
+        r'\s+\S+\s+(\*{2,}\d+|\d{4})\s+(Open|Closed|Derogatory|Collection|Charged)',
+        re.MULTILINE
+    )
+    for m in table_row.finditer(text):
+        _add(m.group(1), m.group(2), '')
+
+    # Pattern 2 — labeled block: "CREDITOR NAME\nAccount #: ****NNNN\nBalance: $..."
+    # Require at least an account number to avoid false-positives (person names, headers, etc.)
+    labeled_block = re.compile(
         r'([A-Z][A-Z\s&.,/-]{3,50})\n'
         r'(?:.*?(?:Account(?:\s+Number)?|Acct)[:\s#]+([\w*-]+).*?\n)?'
         r'(?:.*?Balance[:\s]+\$?([\d,]+).*?\n)?',
         re.MULTILINE
     )
-    for match in account_pattern.finditer(text):
-        creditor = match.group(1).strip()
-        if len(creditor) < 4:
-            continue
-        if re.search(r'(address|employment|personal|summary|report|date|page)', creditor, re.I):
-            continue
-        accounts.append({
-            'creditor_name': creditor,
-            'account_number': (match.group(2) or '').strip(),
-            'balance_raw': (match.group(3) or '').strip(),
-        })
+    for m in labeled_block.finditer(text):
+        acct_num = (m.group(2) or '').strip()
+        if not acct_num:
+            continue  # skip — no account number means this is likely a name/header, not a creditor
+        _add(m.group(1), acct_num, m.group(3))
 
-    return accounts[:50]  # cap at 50 to avoid false positives
+    return accounts[:50]
 
 
 # ── Main parse orchestrator ──────────────────────────────────────────────────
@@ -217,7 +247,7 @@ def parse_report(report: CreditReport) -> dict:
         raise
 
 
-def handle_zip_upload(zip_file_path: str, case=None) -> list[CreditReport]:
+def handle_zip_upload(zip_file_path: str) -> list[CreditReport]:
     """Extract PDFs from a zip archive and create CreditReport records."""
     from django.core.files import File
 
@@ -231,10 +261,7 @@ def handle_zip_upload(zip_file_path: str, case=None) -> list[CreditReport]:
 
             try:
                 with open(tmp_path, 'rb') as f:
-                    report = CreditReport(
-                        original_filename=Path(pdf_name).name,
-                        case=case,
-                    )
+                    report = CreditReport(original_filename=Path(pdf_name).name)
                     report.file.save(Path(pdf_name).name, File(f), save=True)
                 reports.append(report)
             finally:

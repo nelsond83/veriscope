@@ -23,7 +23,7 @@
           <div class="text-subtitle1 text-white">Reports ({{ reports.length }})</div>
           <q-space />
           <q-btn unelevated color="primary" icon="upload_file" label="Upload to Case"
-            :to="{ name: 'upload' }" />
+            :to="{ name: 'upload', query: { case: route.params.id } }" />
         </div>
         <q-card class="vs-card">
           <q-list separator>
@@ -40,13 +40,15 @@
               v-ripple
             >
               <q-item-section avatar>
-                <q-icon name="description" :color="statusColor(r.status)" />
+                <BureauBadge :bureau="r.bureau" :show-name="false" size="sm" />
               </q-item-section>
               <q-item-section>
-                <q-item-label>{{ r.original_filename }}</q-item-label>
+                <q-item-label class="row items-center gap-sm">
+                  {{ r.subject?.full_name || r.original_filename }}
+                  <BureauBadge :bureau="r.bureau" size="sm" class="q-ml-sm" />
+                </q-item-label>
                 <q-item-label caption>
-                  {{ r.subject?.full_name || 'Not yet parsed' }}
-                  · {{ r.bureau_display }}
+                  {{ r.original_filename }}
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
@@ -156,6 +158,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
+import BureauBadge from 'components/BureauBadge.vue'
 
 const route = useRoute()
 const $q = useQuasar()

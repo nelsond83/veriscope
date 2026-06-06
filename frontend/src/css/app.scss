@@ -1,48 +1,150 @@
-// Global Veriscope styles
+// Veriscope — Apple-palette theme
+// Science Blue #0066CC · Shark #1D1D1F · Athens Gray #F5F5F7 · White #FFFFFF
+
+// ── Tokens ──────────────────────────────────────────────────────────────────
+:root {
+  --vs-bg:              #1D1D1F;
+  --vs-surface:         #2C2C2E;
+  --vs-surface-raised:  #3A3A3C;
+  --vs-accent:          #0066CC;
+  --vs-accent-hover:    #0077ED;
+  --vs-text:            #FFFFFF;
+  --vs-text-secondary:  #F5F5F7;
+  --vs-text-muted:      rgba(245, 245, 247, 0.45);
+  --vs-border:          rgba(245, 245, 247, 0.1);
+  --vs-border-subtle:   rgba(245, 245, 247, 0.06);
+  --vs-separator:       rgba(245, 245, 247, 0.08);
+}
+
+// ── Typography ───────────────────────────────────────────────────────────────
+html {
+  font-size: 18px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 body {
-  background: #0d1117;
+  font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', Inter, system-ui, sans-serif;
+  background: var(--vs-bg);
 }
 
+// ── Page background ───────────────────────────────────────────────────────────
+.q-page-container {
+  background: var(--vs-bg);
+  min-height: 100vh;
+}
+
+// ── Card surface ──────────────────────────────────────────────────────────────
 .vs-card {
-  background: #111827;
-  border: 1px solid #1e293b;
+  background: var(--vs-surface);
+  border: 1px solid var(--vs-border);
   border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
+// ── QTable ────────────────────────────────────────────────────────────────────
 .vs-table {
   background: transparent;
 
   .q-table__top,
   .q-table__bottom,
   thead tr:first-child th {
-    background: #0f172a;
+    background: var(--vs-surface);
   }
 
   thead th {
-    color: #64748b;
-    font-size: 11px;
-    letter-spacing: 0.8px;
+    color: var(--vs-text-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.9px;
     text-transform: uppercase;
-    border-bottom: 1px solid #1e293b;
+    font-weight: 700;
+    border-bottom: 1px solid var(--vs-separator) !important;
   }
 
   tbody tr {
     cursor: pointer;
+    transition: background 0.12s ease;
 
     &:hover td {
-      background: rgba(34, 211, 238, 0.04);
+      background: rgba(0, 102, 204, 0.06);
     }
 
     td {
-      color: #e2e8f0;
-      border-bottom: 1px solid #1e293b;
+      color: var(--vs-text-secondary);
+      border-bottom: 1px solid var(--vs-separator) !important;
+      padding: 16px 12px;
+      font-size: 0.88rem;
     }
   }
 }
 
-// Monospace for sensitive data
+// ── QMarkupTable (detail views) ───────────────────────────────────────────────
+.q-markup-table {
+  th {
+    color: var(--vs-text-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-weight: 700;
+    border-bottom: 1px solid var(--vs-separator) !important;
+    padding: 10px 12px;
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--vs-border-subtle) !important;
+    color: var(--vs-text-secondary);
+  }
+  tbody tr:last-child td {
+    border-bottom: none !important;
+  }
+}
+
+// ── Primary button ────────────────────────────────────────────────────────────
+.q-btn.bg-primary {
+  background: var(--vs-accent) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 2px 8px rgba(0, 102, 204, 0.35);
+  border: 1px solid rgba(0, 102, 204, 0.6);
+
+  &:hover {
+    background: var(--vs-accent-hover) !important;
+  }
+}
+
+// ── Inputs ────────────────────────────────────────────────────────────────────
+.q-field--dark.q-field--filled .q-field__control {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--vs-border);
+  border-radius: 8px;
+
+  &:before { border-bottom: none !important; }
+}
+
+// ── Q-list separators ─────────────────────────────────────────────────────────
+.q-separator {
+  background: var(--vs-separator);
+}
+
+// ── Bureau missing (dimmed) ───────────────────────────────────────────────────
+.vs-bureau-missing {
+  opacity: 0.25;
+  filter: grayscale(0.6);
+}
+
+// ── Monospace for sensitive data ──────────────────────────────────────────────
 .font-mono {
-  font-family: 'Roboto Mono', 'Courier New', monospace;
+  font-family: 'SF Mono', 'Roboto Mono', 'Courier New', monospace;
   letter-spacing: 0.5px;
+}
+
+// ── Scrollbar ─────────────────────────────────────────────────────────────────
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 245, 247, 0.15);
+  border-radius: 3px;
+  &:hover { background: rgba(245, 245, 247, 0.25); }
 }

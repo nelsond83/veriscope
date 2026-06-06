@@ -23,7 +23,7 @@
         flat
         dark
         :loading="loading"
-        rows-per-page-options="[10, 25, 50]"
+        :rows-per-page-options="[10, 25, 50]"
         class="vs-table"
         @row-click="(_, row) => $router.push({ name: 'case-detail', params: { id: row.id } })"
       >
@@ -81,9 +81,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
+import { useRoute } from 'vue-router'
 import { api } from 'boot/axios'
 
 const $q = useQuasar()
+const route = useRoute()
 const cases = ref([])
 const loading = ref(false)
 const showCreate = ref(false)
@@ -128,5 +130,8 @@ async function createCase() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  if (route.query.create === '1') showCreate.value = true
+})
 </script>

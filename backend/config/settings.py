@@ -21,7 +21,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'reports',
     'entities',
-    'cases',
+    'identities',
 ]
 
 MIDDLEWARE = [
@@ -36,6 +36,7 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:9000').split(',')
+CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:9000').split(',')
 
 ROOT_URLCONF = 'config.urls'
 

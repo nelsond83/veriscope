@@ -23,7 +23,11 @@ class CaseViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
         label = request.data.get('label', uploaded.name)
-        content = uploaded.read().decode('utf-8-sig')
+        raw = uploaded.read()
+        try:
+            content = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            content = raw.decode('latin-1')
         reader = csv.DictReader(io.StringIO(content))
         created = []
 
