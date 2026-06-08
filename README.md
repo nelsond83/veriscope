@@ -7,7 +7,7 @@ Due diligence platform for validating identities against bureau credit reports.
 | Tool | Version | Install |
 |------|---------|---------|
 | Python | 3.11+ | [python.org](https://www.python.org/downloads/) or `brew install python` |
-| Node.js | 20+ | [nodejs.org](https://nodejs.org/) or `brew install node` |
+| Node.js | 22+ | [nodejs.org](https://nodejs.org/) or `nvm install 22 && nvm use 22` |
 | npm | 9+ | included with Node |
 
 ## Quick Start
