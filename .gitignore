@@ -40,5 +40,5 @@ Thumbs.db
 *.key
 secrets.json
 
-# Generated test data artifacts (PDFs and CSVs — regenerate with scripts/generate_fake_data.py)
-scripts/output/
+# Generated test data artifacts — tracked in repo for easy setup
+# scripts/output/

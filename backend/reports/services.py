@@ -157,7 +157,7 @@ def extract_accounts(text: str) -> list[dict]:
     accounts = []
     seen_creditors = set()
 
-    def _add(creditor, account_number, balance_raw):
+    def _add(creditor, account_type_str, account_number, status_str, balance_raw, date_opened_raw):
         creditor = creditor.strip()
         if len(creditor) < 4:
             return
@@ -169,22 +169,29 @@ def extract_accounts(text: str) -> list[dict]:
         seen_creditors.add(key)
         accounts.append({
             'creditor_name': creditor,
+            'account_type_raw': (account_type_str or '').strip(),
             'account_number': (account_number or '').strip(),
-            'balance_raw': (balance_raw or '').strip(),
+            'status_raw': (status_str or '').strip(),
+            'balance_raw': (balance_raw or '').replace(',', ''),
+            'date_opened_raw': (date_opened_raw or '').strip(),
         })
 
-    # Pattern 1 — table row: ALL_CAPS_CREDITOR MixedCaseType ****NNNN Status ...
-    # Stops the creditor match when a mixed-case word begins (e.g. "Credit Card")
+    # Pattern 1 — table row: ALL_CAPS_CREDITOR  MixedCase Type  AccountNum  Status  $Balance  $Limit  MM/YYYY
+    # Account type is 1-3 mixed-case words; balance/limit have $ prefix; limit is skipped.
     table_row = re.compile(
-        r'^([A-Z][A-Z0-9\s&.,\-/]{3,50}?)(?=\s+[A-Z][a-z]|\s+\*{2})'
-        r'\s+\S+\s+(\*{2,}\d+|\d{4})\s+(Open|Closed|Derogatory|Collection|Charged)',
+        r'^([A-Z][A-Z0-9\s&.,\-/]{3,50}?)(?=\s+[A-Z][a-z]|\s+\*{2}|\s+\d{4})'
+        r'\s+([A-Z][a-z]+(?:\s+[A-Za-z]+){0,2})'
+        r'\s+(\*{2,}\d+|\d{4,20})'
+        r'\s+(Open|Closed|Derogatory|Collection|Charged(?:\s+Off)?)'
+        r'(?:\s+\$([\d,]+))?'
+        r'(?:\s+\$[\d,]+)?'
+        r'(?:\s+(\d{2}/\d{4}))?',
         re.MULTILINE
     )
     for m in table_row.finditer(text):
-        _add(m.group(1), m.group(2), '')
+        _add(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5) or '', m.group(6) or '')
 
-    # Pattern 2 — labeled block: "CREDITOR NAME\nAccount #: ****NNNN\nBalance: $..."
-    # Require at least an account number to avoid false-positives (person names, headers, etc.)
+    # Pattern 2 — labeled block: "CREDITOR NAME\nAccount #: NNNN\nBalance: $..."
     labeled_block = re.compile(
         r'([A-Z][A-Z\s&.,/-]{3,50})\n'
         r'(?:.*?(?:Account(?:\s+Number)?|Acct)[:\s#]+([\w*-]+).*?\n)?'
@@ -194,8 +201,8 @@ def extract_accounts(text: str) -> list[dict]:
     for m in labeled_block.finditer(text):
         acct_num = (m.group(2) or '').strip()
         if not acct_num:
-            continue  # skip — no account number means this is likely a name/header, not a creditor
-        _add(m.group(1), acct_num, m.group(3))
+            continue
+        _add(m.group(1), '', acct_num, '', m.group(3) or '', '')
 
     return accounts[:50]
 

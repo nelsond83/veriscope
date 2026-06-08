@@ -182,11 +182,25 @@
                       <q-icon
                         :name="matchIcon(cellResult(field.key, b).match_status)"
                         :color="matchColor(cellResult(field.key, b).match_status)"
-                        size="15px" />
-                      <span class="field-value"
-                        :style="{ color: matchTextColor(cellResult(field.key, b).match_status) }">
-                        {{ cellResult(field.key, b).report_value || '—' }}
-                      </span>
+                        size="15px" style="flex-shrink:0" />
+                      <div>
+                        <span class="field-value"
+                          :style="{ color: matchTextColor(cellResult(field.key, b).match_status) }">
+                          {{ cellResult(field.key, b).report_value || '—' }}
+                        </span>
+                        <div v-if="cellResult(field.key, b).match_status === 'mismatch'"
+                          style="font-size:0.65rem; color:#FF6B6B; font-weight:600; letter-spacing:0.3px; margin-top:2px">
+                          MISMATCH — on file: {{ cellResult(field.key, b).identity_value || '—' }}
+                        </div>
+                        <div v-else-if="cellResult(field.key, b).match_status === 'missing'"
+                          style="font-size:0.65rem; color:#FF6B6B; font-weight:600; letter-spacing:0.3px; margin-top:2px">
+                          NOT IN REPORT
+                        </div>
+                        <div v-else-if="cellResult(field.key, b).match_status === 'partial'"
+                          style="font-size:0.65rem; color:#FF9500; font-weight:600; letter-spacing:0.3px; margin-top:2px">
+                          PARTIAL MATCH — on file: {{ cellResult(field.key, b).identity_value || '—' }}
+                        </div>
+                      </div>
                     </div>
                   </template>
                   <span v-else class="field-value" style="color:#AAAAAE">—</span>
@@ -210,11 +224,11 @@
                       size="14px" style="margin-top:2px; flex-shrink:0" />
                     <div>
                       <div class="row items-center no-wrap" style="gap:5px">
-                        <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.3">{{ refAddr.street }}</span>
+                        <span :style="{ fontSize:'0.79rem', lineHeight:'1.3', color: refAddrInBureau(refAddr, b) ? '#34C759' : '#FF6B6B' }">{{ refAddr.street }}</span>
                         <q-badge v-if="i === 0" dense label="Current" color="blue-grey-9"
                           style="font-size:0.52rem; padding:1px 5px" />
                       </div>
-                      <div style="font-size:0.72rem; color:#AAAAAE; margin-top:1px">
+                      <div :style="{ fontSize:'0.72rem', marginTop:'1px', color: refAddrInBureau(refAddr, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">
                         {{ [refAddr.city, refAddr.state, refAddr.zip_code].filter(Boolean).join(', ') }}
                       </div>
                       <div v-if="!refAddrInBureau(refAddr, b)"
@@ -235,8 +249,8 @@
                     <div class="row items-start no-wrap" style="gap:7px">
                       <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
                       <div>
-                        <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.3">{{ addr.street }}</span>
-                        <div style="font-size:0.72rem; color:#AAAAAE; margin-top:1px">
+                        <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.3">{{ addr.street }}</span>
+                        <div style="font-size:0.72rem; color:rgba(255,107,107,0.65); margin-top:1px">
                           {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
                         </div>
                         <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
@@ -277,8 +291,8 @@
                         size="14px" style="margin-top:2px; flex-shrink:0" />
                       <div>
                         <div class="row items-center" style="gap:5px; flex-wrap:wrap">
-                          <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.4">{{ refAcct.creditor_name }}</span>
-                          <span v-if="refAcct.account_number" style="font-family:monospace; font-size:0.7rem; color:#AAAAAE">{{ refAcct.account_number }}</span>
+                          <span :style="{ fontSize:'0.79rem', lineHeight:'1.4', color: refAcctInBureau(refAcct, b) ? '#34C759' : '#FF6B6B' }">{{ refAcct.creditor_name }}</span>
+                          <span v-if="refAcct.account_number" :style="{ fontFamily:'monospace', fontSize:'0.7rem', color: refAcctInBureau(refAcct, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">{{ refAcct.account_number }}</span>
                         </div>
                         <div v-if="!refAcctInBureau(refAcct, b)"
                           style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
@@ -299,8 +313,8 @@
                         <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
                         <div>
                           <div class="row items-center" style="gap:5px; flex-wrap:wrap">
-                            <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.4">{{ acct.creditor_name }}</span>
-                            <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:#AAAAAE">{{ acct.account_number }}</span>
+                            <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.4">{{ acct.creditor_name }}</span>
+                            <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:rgba(255,107,107,0.65)">{{ acct.account_number }}</span>
                           </div>
                           <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
                             NOT IN REFERENCE DATA

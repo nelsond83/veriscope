@@ -96,6 +96,37 @@ class CreditReportViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(report).data)
 
 
+_ACCT_TYPE_MAP = {
+    'credit card': 'credit_card',
+    'auto loan': 'auto_loan',
+    'mortgage': 'mortgage',
+    'student loan': 'student_loan',
+    'personal loan': 'personal_loan',
+    'collection': 'collection',
+    'medical': 'medical',
+}
+_ACCT_STATUS_MAP = {
+    'open': 'open',
+    'closed': 'closed',
+    'derogatory': 'derogatory',
+    'collection': 'collection',
+    'charged': 'charged_off',
+    'charged off': 'charged_off',
+}
+
+
+def _parse_opened(s):
+    import re as _re
+    from datetime import date as _date
+    m = _re.match(r'^(\d{2})/(\d{4})$', s or '')
+    if m:
+        try:
+            return _date(int(m.group(2)), int(m.group(1)), 1)
+        except ValueError:
+            pass
+    return None
+
+
 def _save_extracted_data(report: CreditReport, extracted: dict):
     from entities.models import Subject, AlternateName, Address, FinancialAccount
 
@@ -123,7 +154,7 @@ def _save_extracted_data(report: CreditReport, extracted: dict):
     FinancialAccount.objects.filter(subject=subject).delete()
     for acct in extracted.get('accounts', []):
         balance = None
-        raw_balance = acct.get('balance_raw', '').replace(',', '')
+        raw_balance = acct.get('balance_raw', '').replace(',', '').replace('$', '')
         if raw_balance:
             try:
                 balance = float(raw_balance)
@@ -133,5 +164,8 @@ def _save_extracted_data(report: CreditReport, extracted: dict):
             subject=subject,
             creditor_name=acct.get('creditor_name', ''),
             account_number=acct.get('account_number', ''),
+            account_type=_ACCT_TYPE_MAP.get(acct.get('account_type_raw', '').lower(), 'other'),
+            status=_ACCT_STATUS_MAP.get(acct.get('status_raw', '').lower(), 'unknown'),
             balance=balance,
+            date_opened=_parse_opened(acct.get('date_opened_raw', '')),
         )
