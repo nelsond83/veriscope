@@ -28,7 +28,7 @@
         hide-pagination
         class="vs-table col"
         style="height:100%"
-        @row-click="(_, row) => $router.push({ name: 'identity-detail', params: { id: row.id } })"
+        @row-click="(_, row) => $router.push({ name: 'identity-detail', params: { id: row.id }, query: activeFilter ? { dd_filter: activeFilter } : {} })"
       >
         <template #body-cell-dd_status="props">
           <q-td :props="props">
@@ -53,7 +53,7 @@
         <template #body-cell-actions="props">
           <q-td :props="props" auto-width>
             <q-btn flat round dense icon="chevron_right"
-              :to="{ name: 'identity-detail', params: { id: props.row.id } }" />
+              :to="{ name: 'identity-detail', params: { id: props.row.id }, query: activeFilter ? { dd_filter: activeFilter } : {} }" />
           </q-td>
         </template>
         <template #no-data>

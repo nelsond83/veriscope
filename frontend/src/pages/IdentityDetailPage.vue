@@ -2,7 +2,7 @@
   <q-page class="q-pa-lg">
     <!-- Back nav -->
     <div class="row items-center q-mb-md">
-      <q-btn flat round icon="arrow_back" :to="{ name: 'identities' }" class="q-mr-sm" />
+      <q-btn flat round icon="arrow_back" :to="{ name: 'identities', query: route.query.dd_filter ? { dd_status: route.query.dd_filter } : {} }" class="q-mr-sm" />
       <span class="text-caption text-grey-6">Identities</span>
     </div>
 
