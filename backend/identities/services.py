@@ -139,12 +139,22 @@ def run_comparison(identity: Identity, report) -> list:
     results = [compare(f, iv, rv) for f, iv, rv in fields]
     results = [r for r in results if r is not None]
 
-    # Flag bureau accounts not found in any identity reference account
+    # Flag account discrepancies when identity has reference accounts
     if identity.ref_accounts.exists() and hasattr(subject, 'financial_accounts'):
         bureau_accts = list(subject.financial_accounts.all())
-        if bureau_accts:
-            ref_accts = list(identity.ref_accounts.all())
+        ref_accts = list(identity.ref_accounts.all())
 
+        if not bureau_accts:
+            # Bureau report has no accounts but identity has reference accounts on file
+            ref_count = len(ref_accts)
+            results.append(ComparisonResult(
+                identity=identity, report=report,
+                field_name='account_missing',
+                identity_value=f'{ref_count} account{"s" if ref_count != 1 else ""} on file',
+                report_value='No accounts found in report',
+                match_status='mismatch',
+            ))
+        else:
             def acct_last4(s):
                 return re.sub(r'\D', '', s or '')[-4:]
 
@@ -163,6 +173,22 @@ def run_comparison(identity: Identity, report) -> list:
                 overlap = rt & bt
                 return len(overlap) >= min(2, min(len(rt), len(bt)))
 
+            # Reference accounts not found in bureau report
+            missing_accts = [
+                f'{r.creditor_name} {r.account_number}'.strip()
+                for r in ref_accts
+                if not any(acct_matches(r, b) for b in bureau_accts)
+            ]
+            if missing_accts:
+                results.append(ComparisonResult(
+                    identity=identity, report=report,
+                    field_name='account_missing',
+                    identity_value='; '.join(missing_accts),
+                    report_value='',
+                    match_status='mismatch',
+                ))
+
+            # Bureau accounts not found in any reference account
             unknown_accts = [
                 f'{a.creditor_name} {a.account_number}'.strip()
                 for a in bureau_accts
@@ -177,29 +203,43 @@ def run_comparison(identity: Identity, report) -> list:
                     match_status='mismatch',
                 ))
 
-    # Flag bureau addresses not found in any identity reference address
+    # Flag address discrepancies when identity has reference addresses
     if identity.addresses.exists() and hasattr(subject, 'addresses'):
-        ref_streets = set()
-        for ref_addr in identity.addresses.all():
-            key = re.sub(r'\s+', ' ', (ref_addr.street or '').lower().strip())
-            if key:
-                ref_streets.add(key)
+        def norm_street(s):
+            return re.sub(r'\s+', ' ', (s or '').lower().strip())
 
-        unknown = []
-        for bureau_addr in subject.addresses.all():
-            key = re.sub(r'\s+', ' ', (bureau_addr.street or '').lower().strip())
-            if key and key not in ref_streets:
-                unknown.append(fmt_addr(
-                    bureau_addr.street, bureau_addr.city,
-                    bureau_addr.state, bureau_addr.zip_code,
-                ))
+        ref_addrs = list(identity.addresses.all())
+        bureau_addrs = list(subject.addresses.all())
+        ref_streets = {norm_street(a.street) for a in ref_addrs if a.street}
+        bureau_streets = {norm_street(a.street) for a in bureau_addrs if a.street}
 
-        if unknown:
+        # Reference addresses not found in bureau report
+        missing_addrs = [
+            fmt_addr(a.street, a.city, a.state, a.zip_code)
+            for a in ref_addrs
+            if norm_street(a.street) not in bureau_streets
+        ]
+        if missing_addrs:
+            results.append(ComparisonResult(
+                identity=identity, report=report,
+                field_name='address_missing',
+                identity_value='; '.join(missing_addrs),
+                report_value='',
+                match_status='mismatch',
+            ))
+
+        # Bureau addresses not found in reference
+        unknown_addrs = [
+            fmt_addr(a.street, a.city, a.state, a.zip_code)
+            for a in bureau_addrs
+            if norm_street(a.street) not in ref_streets
+        ]
+        if unknown_addrs:
             results.append(ComparisonResult(
                 identity=identity, report=report,
                 field_name='address_unknown',
                 identity_value='',
-                report_value='; '.join(unknown),
+                report_value='; '.join(unknown_addrs),
                 match_status='mismatch',
             ))
 

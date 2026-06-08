@@ -214,8 +214,8 @@ async function uploadAll() {
 }
 .vs-dropzone:hover,
 .vs-dropzone--active {
-  border-color: #0066CC;
-  background: rgba(0, 102, 204, 0.06);
+  border-color: #C8102E;
+  background: rgba(200, 16, 46, 0.06);
 }
 .hidden { display: none; }
 </style>

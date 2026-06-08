@@ -12,7 +12,7 @@
         <div class="row items-start justify-between no-wrap q-mb-md">
           <div>
             <div class="text-h5 text-weight-bold text-white">{{ identity.full_name }}</div>
-            <div class="text-caption q-mt-xs" style="color:rgba(245,245,247,0.45)">
+            <div class="text-caption q-mt-xs" style="color:#AAAAAE">
               Reference identity record
             </div>
           </div>
@@ -20,6 +20,8 @@
             <q-badge :color="ddColor(identity.dd_status)" :label="ddLabel(identity.dd_status)"
               style="padding:6px 14px; font-size:0.75rem" />
             <q-btn flat round icon="edit" size="sm" title="Edit" @click="openEdit" />
+            <q-btn flat round icon="delete" size="sm" title="Delete identity" color="negative"
+              @click="showDelete = true" />
           </div>
         </div>
 
@@ -63,18 +65,18 @@
               <div class="ref-label q-mb-xs">Phone Numbers</div>
               <div v-for="(p, i) in identity.phones" :key="p.id || i"
                 class="row items-center q-mb-xs" style="gap:6px">
-                <q-icon name="phone" size="13px" style="color:rgba(245,245,247,0.35)" />
+                <q-icon name="phone" size="13px" style="color:#AAAAAE" />
                 <span class="ref-value" style="font-size:0.85rem">{{ p.number }}</span>
-                <span style="color:rgba(245,245,247,0.35); font-size:0.7rem; text-transform:capitalize">{{ p.phone_type }}</span>
+                <span style="color:#AAAAAE; font-size:0.7rem; text-transform:capitalize">{{ p.phone_type }}</span>
               </div>
             </template>
             <template v-if="identity.emails?.length">
               <div class="ref-label q-mb-xs" :class="identity.phones?.length ? 'q-mt-sm' : ''">Email Addresses</div>
               <div v-for="(e, i) in identity.emails" :key="e.id || i"
                 class="row items-center q-mb-xs" style="gap:6px">
-                <q-icon name="email" size="13px" style="color:rgba(245,245,247,0.35)" />
+                <q-icon name="email" size="13px" style="color:#AAAAAE" />
                 <span class="ref-value" style="font-size:0.85rem">{{ e.address }}</span>
-                <span style="color:rgba(245,245,247,0.35); font-size:0.7rem; text-transform:capitalize">{{ e.email_type }}</span>
+                <span style="color:#AAAAAE; font-size:0.7rem; text-transform:capitalize">{{ e.email_type }}</span>
               </div>
             </template>
           </div>
@@ -87,7 +89,7 @@
             <div class="text-white" style="font-size:0.92rem; font-weight:500; line-height:1.5">
               {{ identityCurrentAddr.street }}
             </div>
-            <div style="color:rgba(245,245,247,0.65); font-size:0.85rem">
+            <div style="color:#C4C4C8; font-size:0.85rem">
               {{ [identityCurrentAddr.city, identityCurrentAddr.state, identityCurrentAddr.zip_code].filter(Boolean).join(', ') }}
             </div>
           </div>
@@ -135,7 +137,7 @@
         <!-- Notes -->
         <template v-if="identity.notes">
           <div class="ref-label q-mb-xs">Notes</div>
-          <div style="color:rgba(245,245,247,0.65); font-size:0.85rem">{{ identity.notes }}</div>
+          <div style="color:#C4C4C8; font-size:0.85rem">{{ identity.notes }}</div>
         </template>
       </q-card-section>
     </q-card>
@@ -163,8 +165,8 @@
           <!-- No report placeholder -->
           <q-card-section v-if="!reportFor(b)"
             class="col column items-center justify-center q-py-xl text-center">
-            <q-icon name="description" size="28px" style="color:rgba(245,245,247,0.2)" />
-            <div class="q-mt-sm" style="color:rgba(245,245,247,0.3); font-size:0.8rem">
+            <q-icon name="description" size="28px" style="color:#606064" />
+            <div class="q-mt-sm" style="color:#AAAAAE; font-size:0.8rem">
               No report uploaded
             </div>
           </q-card-section>
@@ -187,66 +189,127 @@
                       </span>
                     </div>
                   </template>
-                  <span v-else class="field-value" style="color:rgba(245,245,247,0.3)">—</span>
+                  <span v-else class="field-value" style="color:#AAAAAE">—</span>
                 </q-item-section>
               </q-item>
             </q-list>
 
-            <!-- Bureau addresses: check each against reference data -->
-            <template v-if="reportFor(b)?.subject?.addresses?.length">
+            <!-- Addresses: reference addresses checked against bureau, then extra bureau addresses -->
+            <template v-if="reportFor(b) && (identity.addresses?.length || reportFor(b)?.subject?.addresses?.length)">
               <q-separator dark />
               <div class="q-pa-md">
                 <div class="field-label q-mb-sm">Addresses</div>
-                <div v-for="(addr, i) in reportFor(b).subject.addresses" :key="i"
+
+                <!-- Reference addresses: check each against bureau report -->
+                <div v-for="(refAddr, i) in identity.addresses" :key="'ref-addr-' + refAddr.id"
                   class="bureau-addr-row" :class="i > 0 ? 'q-mt-sm' : ''">
                   <div class="row items-start no-wrap" style="gap:7px">
                     <q-icon
-                      :name="addrInRef(addr) ? 'check_circle' : 'cancel'"
-                      :color="addrInRef(addr) ? 'positive' : 'negative'"
+                      :name="refAddrInBureau(refAddr, b) ? 'check_circle' : 'cancel'"
+                      :color="refAddrInBureau(refAddr, b) ? 'positive' : 'negative'"
                       size="14px" style="margin-top:2px; flex-shrink:0" />
                     <div>
                       <div class="row items-center no-wrap" style="gap:5px">
-                        <span style="font-size:0.79rem; color:rgba(245,245,247,0.85); line-height:1.3">{{ addr.street }}</span>
+                        <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.3">{{ refAddr.street }}</span>
                         <q-badge v-if="i === 0" dense label="Current" color="blue-grey-9"
                           style="font-size:0.52rem; padding:1px 5px" />
                       </div>
-                      <div style="font-size:0.72rem; color:rgba(245,245,247,0.4); margin-top:1px">
-                        {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
+                      <div style="font-size:0.72rem; color:#AAAAAE; margin-top:1px">
+                        {{ [refAddr.city, refAddr.state, refAddr.zip_code].filter(Boolean).join(', ') }}
                       </div>
-                      <div v-if="!addrInRef(addr)"
-                        style="font-size:0.65rem; color:#FF3B30; margin-top:2px; font-weight:600; letter-spacing:0.3px">
-                        NOT IN REFERENCE DATA
+                      <div v-if="!refAddrInBureau(refAddr, b)"
+                        style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                        NOT IN REPORT
                       </div>
                     </div>
                   </div>
                 </div>
+
+                <!-- Extra bureau addresses not in reference -->
+                <template v-if="unknownBureauAddrs(b).length">
+                  <div style="font-size:0.6rem; color:#606064; text-transform:uppercase; letter-spacing:0.6px; margin: 10px 0 5px">
+                    Additional bureau addresses
+                  </div>
+                  <div v-for="(addr, i) in unknownBureauAddrs(b)" :key="'unk-addr-' + i"
+                    class="bureau-addr-row" :class="i > 0 ? 'q-mt-sm' : ''">
+                    <div class="row items-start no-wrap" style="gap:7px">
+                      <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
+                      <div>
+                        <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.3">{{ addr.street }}</span>
+                        <div style="font-size:0.72rem; color:#AAAAAE; margin-top:1px">
+                          {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
+                        </div>
+                        <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                          NOT IN REFERENCE DATA
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
             </template>
 
-            <!-- Bureau accounts: check each against reference data -->
-            <template v-if="reportFor(b)?.subject?.financial_accounts?.length">
+            <!-- Accounts: reference accounts checked against bureau, then bureau unknowns -->
+            <template v-if="reportFor(b) && (identity.ref_accounts?.length || reportFor(b)?.subject?.financial_accounts?.length)">
               <q-separator dark />
               <div class="q-pa-md">
                 <div class="field-label q-mb-sm">Accounts</div>
-                <div v-for="(acct, i) in reportFor(b).subject.financial_accounts" :key="i"
-                  class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''">
-                  <div class="row items-start no-wrap" style="gap:7px">
-                    <q-icon
-                      :name="acctInRef(acct) ? 'check_circle' : 'cancel'"
-                      :color="acctInRef(acct) ? 'positive' : 'negative'"
-                      size="14px" style="margin-top:2px; flex-shrink:0" />
-                    <div>
-                      <div class="row items-center" style="gap:5px; flex-wrap:wrap">
-                        <span style="font-size:0.79rem; color:rgba(245,245,247,0.85); line-height:1.4">{{ acct.creditor_name }}</span>
-                        <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:rgba(245,245,247,0.35)">{{ acct.account_number }}</span>
-                      </div>
-                      <div v-if="!acctInRef(acct)"
-                        style="font-size:0.65rem; color:#FF3B30; margin-top:2px; font-weight:600; letter-spacing:0.3px">
-                        NOT IN REFERENCE DATA
+
+                <!-- No accounts parsed but ref accounts exist -->
+                <div v-if="!reportFor(b)?.subject?.financial_accounts?.length"
+                  class="row items-center no-wrap" style="gap:6px; padding:4px 0">
+                  <q-icon name="warning" size="15px" style="color:#FF6B6B; flex-shrink:0" />
+                  <span style="font-size:0.72rem; color:#FF6B6B; font-weight:600; letter-spacing:0.3px">
+                    No accounts found in report —
+                    {{ identity.ref_accounts?.length }}
+                    reference account{{ identity.ref_accounts?.length !== 1 ? 's' : '' }} expected
+                  </span>
+                </div>
+
+                <template v-else>
+                  <!-- Reference accounts: check each against bureau report -->
+                  <div v-for="(refAcct, i) in identity.ref_accounts" :key="'ref-' + refAcct.id"
+                    class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''">
+                    <div class="row items-start no-wrap" style="gap:7px">
+                      <q-icon
+                        :name="refAcctInBureau(refAcct, b) ? 'check_circle' : 'cancel'"
+                        :color="refAcctInBureau(refAcct, b) ? 'positive' : 'negative'"
+                        size="14px" style="margin-top:2px; flex-shrink:0" />
+                      <div>
+                        <div class="row items-center" style="gap:5px; flex-wrap:wrap">
+                          <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.4">{{ refAcct.creditor_name }}</span>
+                          <span v-if="refAcct.account_number" style="font-family:monospace; font-size:0.7rem; color:#AAAAAE">{{ refAcct.account_number }}</span>
+                        </div>
+                        <div v-if="!refAcctInBureau(refAcct, b)"
+                          style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                          NOT IN REPORT
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+
+                  <!-- Bureau accounts not in reference -->
+                  <template v-if="unknownBureauAccts(b).length">
+                    <div style="font-size:0.6rem; color:#606064; text-transform:uppercase; letter-spacing:0.6px; margin: 10px 0 5px">
+                      Additional bureau accounts
+                    </div>
+                    <div v-for="(acct, i) in unknownBureauAccts(b)" :key="'unk-' + i"
+                      class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''">
+                      <div class="row items-start no-wrap" style="gap:7px">
+                        <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
+                        <div>
+                          <div class="row items-center" style="gap:5px; flex-wrap:wrap">
+                            <span style="font-size:0.79rem; color:#D8D8DA; line-height:1.4">{{ acct.creditor_name }}</span>
+                            <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:#AAAAAE">{{ acct.account_number }}</span>
+                          </div>
+                          <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                            NOT IN REFERENCE DATA
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </template>
               </div>
             </template>
           </template>
@@ -281,25 +344,12 @@
         <div class="timeline-content q-mb-lg">
           <div class="row items-center q-mb-xs" style="gap:8px">
             <span class="text-weight-bold text-white" style="font-size:0.9rem">{{ batch.label }}</span>
-            <q-badge v-if="idx === 0" label="Latest" color="primary" />
+            <q-badge v-if="idx === 0" label="Latest"
+              style="background:#FFB81C; color:#111111; font-weight:700; font-size:0.65rem; letter-spacing:0.4px; padding:3px 8px" />
             <span class="text-caption text-grey-6">{{ batch.reports.length }} report{{ batch.reports.length !== 1 ? 's' : '' }}</span>
           </div>
 
           <q-card class="vs-card">
-            <!-- Bureau summary row -->
-            <div class="row q-pa-md" style="gap:12px; flex-wrap:wrap">
-              <div v-for="b in BUREAUS" :key="b" class="row items-center" style="gap:6px">
-                <BureauBadge :bureau="b" :show-name="true" size="sm" />
-                <template v-if="batch.byBureau[b]">
-                  <q-badge :color="statusColor(batch.byBureau[b].status)"
-                    :label="batch.byBureau[b].status_display" style="font-size:0.65rem" />
-                </template>
-                <span v-else class="text-caption text-grey-7">—</span>
-              </div>
-            </div>
-
-            <q-separator dark />
-
             <q-list separator dense>
               <q-item v-for="r in batch.reports" :key="r.id"
                 :to="{ name: 'report-detail', params: { id: r.id }, query: { from: route.params.id } }" clickable v-ripple>
@@ -332,17 +382,19 @@
       </div>
       <q-card class="vs-card q-mb-xl">
         <q-list separator>
-          <q-item v-for="r in unmatched" :key="r.id">
+          <q-item v-for="r in unmatched" :key="r.id"
+            clickable v-ripple :to="{ name: 'unmatched' }">
             <q-item-section avatar>
-              <BureauBadge :bureau="r.bureau" :show-name="false" size="sm" />
+              <BureauBadge :bureau="r.bureau" :show-name="false" size="md" />
             </q-item-section>
             <q-item-section>
               <q-item-label>{{ r.original_filename }}</q-item-label>
               <q-item-label caption>{{ r.subject?.full_name || 'Not parsed' }}</q-item-label>
             </q-item-section>
             <q-item-section side>
-              <q-btn unelevated dense size="sm" color="secondary" label="Assign here"
-                :loading="assigning === r.id" @click="assignReport(r.id)" />
+              <q-btn unelevated color="secondary" label="Assign here" icon="link"
+                :loading="assigning === r.id"
+                @click.prevent.stop="assignReport(r.id)" />
             </q-item-section>
           </q-item>
         </q-list>
@@ -450,17 +502,38 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Delete confirmation dialog -->
+    <q-dialog v-model="showDelete" persistent>
+      <q-card class="vs-card" style="min-width:340px">
+        <q-card-section>
+          <div class="text-h6 text-white">Delete Identity?</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p style="color:#EBEBED">
+            This will permanently delete <strong>{{ identity?.full_name }}</strong> and all
+            associated reports and comparisons. This cannot be undone.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md" style="gap:8px">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn unelevated color="negative" label="Delete" icon="delete"
+            :loading="deleting" @click="deleteIdentity" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
 import BureauBadge from 'components/BureauBadge.vue'
 
 const route = useRoute()
+const router = useRouter()
 const $q = useQuasar()
 
 const identity = ref(null)
@@ -469,7 +542,9 @@ const comparisons = ref([])
 const unmatched = ref([])
 const assigning = ref(null)
 const showEdit = ref(false)
+const showDelete = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const editForm = ref({})
 
 const BUREAUS = ['equifax', 'experian', 'transunion']
@@ -485,25 +560,46 @@ const identityPriorAddrs = computed(() => {
 })
 
 // Check if a bureau-reported address matches any identity reference address
+const normStreet = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ')
+
 function addrInRef(addr) {
-  const norm = s => (s || '').toLowerCase().trim().replace(/\s+/g, ' ')
-  const reportStreet = norm(addr.street)
-  return (identity.value?.addresses || []).some(a => norm(a.street) === reportStreet)
+  return (identity.value?.addresses || []).some(a => normStreet(a.street) === normStreet(addr.street))
+}
+
+function refAddrInBureau(refAddr, b) {
+  const bureauAddrs = reportFor(b)?.subject?.addresses || []
+  return bureauAddrs.some(a => normStreet(a.street) === normStreet(refAddr.street))
+}
+
+function unknownBureauAddrs(b) {
+  const refStreets = new Set((identity.value?.addresses || []).map(a => normStreet(a.street)))
+  return (reportFor(b)?.subject?.addresses || []).filter(a => !refStreets.has(normStreet(a.street)))
+}
+
+const acctLast4 = s => (s || '').replace(/\D/g, '').slice(-4)
+const acctTokens = s => new Set((s || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(t => t.length > 2))
+function acctPairMatches(a, b) {
+  const al4 = acctLast4(a.account_number), bl4 = acctLast4(b.account_number)
+  if (al4 && bl4 && al4 === bl4) return true
+  const at = acctTokens(a.creditor_name), bt = acctTokens(b.creditor_name)
+  const overlap = [...at].filter(t => bt.has(t)).length
+  return overlap >= Math.min(2, Math.min(at.size, bt.size))
 }
 
 // Check if a bureau-reported account matches any identity reference account
 function acctInRef(bureauAcct) {
-  const last4 = s => (s || '').replace(/\D/g, '').slice(-4)
-  const tokens = s => new Set((s || '').toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(t => t.length > 2))
-  const bl4 = last4(bureauAcct.account_number)
-  const bt = tokens(bureauAcct.creditor_name)
-  return (identity.value?.ref_accounts || []).some(ref => {
-    const rl4 = last4(ref.account_number)
-    if (bl4 && rl4 && bl4 === rl4) return true
-    const rt = tokens(ref.creditor_name)
-    const overlap = [...bt].filter(t => rt.has(t)).length
-    return overlap >= Math.min(2, Math.min(bt.size, rt.size))
-  })
+  return (identity.value?.ref_accounts || []).some(ref => acctPairMatches(ref, bureauAcct))
+}
+
+// Check if a reference account appears in the bureau report for bureau b
+function refAcctInBureau(refAcct, b) {
+  const bureauAccts = reportFor(b)?.subject?.financial_accounts || []
+  return bureauAccts.some(bureau => acctPairMatches(refAcct, bureau))
+}
+
+// Bureau accounts not matched by any reference account
+function unknownBureauAccts(b) {
+  return (reportFor(b)?.subject?.financial_accounts || []).filter(acct => !acctInRef(acct))
 }
 
 const FIELDS = [
@@ -582,7 +678,7 @@ const statusColor = (s) => ({ parsed: 'positive', failed: 'negative', parsing: '
 const confidenceLabel = (c) => ({ ssn: 'SSN', ssn_last4_name: 'SSN+Name', name_dob: 'Name+DOB', manual: 'Manual' }[c] || c)
 
 const matchColor = (s) => ({ match: 'positive', mismatch: 'negative', partial: 'warning', missing: 'grey' }[s] || 'grey')
-const matchTextColor = (s) => ({ match: '#34C759', mismatch: '#FF3B30', partial: '#FF9500', missing: 'rgba(245,245,247,0.45)' }[s] || 'rgba(245,245,247,0.45)')
+const matchTextColor = (s) => ({ match: '#34C759', mismatch: '#FF6B6B', partial: '#FF9500', missing: '#AAAAAE' }[s] || '#AAAAAE')
 const matchIcon = (s) => ({ match: 'check_circle', mismatch: 'cancel', partial: 'change_circle', missing: 'help' }[s] || 'help')
 
 async function load() {
@@ -650,12 +746,26 @@ async function saveEdit() {
   }
 }
 
+async function deleteIdentity() {
+  deleting.value = true
+  try {
+    await api.delete(`/identities/${route.params.id}/`)
+    showDelete.value = false
+    $q.notify({ type: 'positive', message: 'Identity deleted.' })
+    router.push({ name: 'identities' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Delete failed.' })
+  } finally {
+    deleting.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
 <style scoped>
 .ref-label {
-  color: rgba(245, 245, 247, 0.45);
+  color: #FFB81C;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.7px;
@@ -668,7 +778,7 @@ onMounted(load)
   font-weight: 500;
 }
 .ref-current-addr {
-  border-left: 3px solid rgba(245, 245, 247, 0.2);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
   padding: 6px 0 6px 12px;
 }
 
@@ -682,7 +792,7 @@ onMounted(load)
   align-items: baseline;
   gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .ref-prior-item:last-child {
@@ -694,20 +804,20 @@ onMounted(load)
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: rgba(245, 245, 247, 0.35);
+  color: #AAAAAE;
   min-width: 54px;
   flex-shrink: 0;
 }
 
 .ref-prior-addr {
   font-size: 0.82rem;
-  color: rgba(245, 245, 247, 0.6);
+  color: #C4C4C8;
   line-height: 1.4;
 }
 
 .bureau-addr-row {
   padding: 4px 0;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .bureau-addr-row:last-child {
@@ -716,7 +826,7 @@ onMounted(load)
 
 .bureau-acct-row {
   padding: 4px 0;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .bureau-acct-row:last-child {
@@ -724,7 +834,7 @@ onMounted(load)
 }
 
 .field-label {
-  color: rgba(245, 245, 247, 0.45);
+  color: #FFB81C;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.7px;
@@ -756,18 +866,18 @@ onMounted(load)
   height: 12px;
   border-radius: 50%;
   background: #3A3A3C;
-  border: 2px solid rgba(245, 245, 247, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   flex-shrink: 0;
 }
 .timeline-dot--latest {
-  background: #0066CC;
-  border-color: #0066CC;
-  box-shadow: 0 0 8px rgba(0, 102, 204, 0.5);
+  background: #C8102E;
+  border-color: #C8102E;
+  box-shadow: 0 0 8px rgba(200, 16, 46, 0.5);
 }
 .timeline-line {
   flex: 1;
   width: 2px;
-  background: rgba(245, 245, 247, 0.08);
+  background: rgba(255, 255, 255, 0.08);
   margin-top: 4px;
 }
 .timeline-content {
@@ -776,7 +886,7 @@ onMounted(load)
 }
 
 .ref-accounts-table {
-  border: 1px solid rgba(245, 245, 247, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -786,12 +896,12 @@ onMounted(load)
   grid-template-columns: 2fr 1.2fr 1fr 0.8fr;
   gap: 8px;
   padding: 7px 12px;
-  background: rgba(245, 245, 247, 0.05);
+  background: rgba(255, 255, 255, 0.05);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: rgba(245, 245, 247, 0.35);
+  color: #AAAAAE;
 }
 
 .ref-accounts-row {
@@ -799,18 +909,18 @@ onMounted(load)
   grid-template-columns: 2fr 1.2fr 1fr 0.8fr;
   gap: 8px;
   padding: 8px 12px;
-  border-top: 1px solid rgba(245, 245, 247, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   align-items: center;
 }
 
 .ref-acct-name {
   font-size: 0.8rem;
-  color: rgba(245, 245, 247, 0.85);
+  color: #D8D8DA;
   font-weight: 500;
 }
 
 .ref-acct-cell {
   font-size: 0.78rem;
-  color: rgba(245, 245, 247, 0.55);
+  color: #B8B8BD;
 }
 </style>

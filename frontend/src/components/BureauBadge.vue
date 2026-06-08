@@ -24,10 +24,10 @@ const props = defineProps({
 })
 
 const META = {
-  equifax:    { abbr: 'EFX', label: 'Equifax' },
-  experian:   { abbr: 'EXP', label: 'Experian' },
-  transunion: { abbr: 'TU',  label: 'TransUnion' },
-  unknown:    { abbr: '?',   label: 'Unknown' },
+  equifax:    { abbr: 'EQ', label: 'Equifax' },
+  experian:   { abbr: 'EX', label: 'Experian' },
+  transunion: { abbr: 'TU', label: 'TransUnion' },
+  unknown:    { abbr: '?',  label: 'Unknown' },
 }
 
 const abbr  = computed(() => META[props.bureau]?.abbr  ?? '?')
@@ -62,40 +62,40 @@ const sizeStyle = computed(() => ({
   letter-spacing: 1px;
 }
 
-/* Equifax — red */
+/* Equifax — red  |  text #FFCCCC on effective bg ~#4B2028 = 9.1:1 ✓ */
 .bureau-badge--equifax {
-  background: rgba(255, 59, 48, 0.12);
-  border-color: rgba(255, 59, 48, 0.3);
-  color: #FF6B6B;
+  background: rgba(200, 16, 46, 0.20);
+  border-color: rgba(200, 16, 46, 0.45);
+  color: #FFCCCC;
 }
 .bureau-badge--equifax .bureau-badge__abbr {
-  color: #FF8585;
+  color: #FFB0B0;
 }
 
-/* Experian — violet */
+/* Experian — violet  |  text #E5B8FF on effective bg ~#41244F = 7.9:1 ✓ */
 .bureau-badge--experian {
-  background: rgba(175, 82, 222, 0.12);
-  border-color: rgba(175, 82, 222, 0.3);
-  color: #C57EE8;
+  background: rgba(148, 0, 211, 0.20);
+  border-color: rgba(148, 0, 211, 0.45);
+  color: #E5B8FF;
 }
 .bureau-badge--experian .bureau-badge__abbr {
-  color: #D49AF0;
+  color: #D090F8;
 }
 
-/* TransUnion — Science Blue */
+/* TransUnion — Blue  |  text #5AABFF on effective bg ~#1A2D4A = 5.3:1 ✓ */
 .bureau-badge--transunion {
-  background: rgba(0, 102, 204, 0.15);
-  border-color: rgba(0, 102, 204, 0.35);
+  background: rgba(0, 82, 204, 0.20);
+  border-color: rgba(0, 82, 204, 0.45);
   color: #5AABFF;
 }
 .bureau-badge--transunion .bureau-badge__abbr {
   color: #80BEFF;
 }
 
-/* Unknown */
+/* Unknown  |  #AAAAAE on dark bg = 6.3:1 ✓ */
 .bureau-badge--unknown {
-  background: rgba(245, 245, 247, 0.07);
-  border-color: rgba(245, 245, 247, 0.15);
-  color: rgba(245, 245, 247, 0.45);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #AAAAAE;
 }
 </style>

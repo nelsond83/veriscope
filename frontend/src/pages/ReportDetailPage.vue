@@ -81,7 +81,7 @@
                   <q-icon name="location_on" color="grey-7" size="16px" />
                 </q-item-section>
                 <q-item-section>
-                  <q-item-label style="font-size:0.82rem; color:rgba(245,245,247,0.85)">{{ a.street }}</q-item-label>
+                  <q-item-label style="font-size:0.82rem; color:#D8D8DA">{{ a.street }}</q-item-label>
                   <q-item-label caption>{{ a.city }}, {{ a.state }} {{ a.zip_code }}</q-item-label>
                 </q-item-section>
                 <q-item-section side>
@@ -188,9 +188,11 @@ const reparsing = ref(false)
 const showRaw = ref(false)
 
 function goBack() {
-  const fromIdentity = route.query.from
-  if (fromIdentity) {
-    router.push({ name: 'identity-detail', params: { id: fromIdentity } })
+  const from = route.query.from
+  if (from === 'unmatched') {
+    router.push({ name: 'unmatched' })
+  } else if (from) {
+    router.push({ name: 'identity-detail', params: { id: from } })
   } else {
     router.push({ name: 'identities' })
   }
@@ -246,7 +248,7 @@ onMounted(load)
   align-items: baseline;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 .parsed-field:last-child {
   border-bottom: none;
@@ -256,20 +258,20 @@ onMounted(load)
   font-weight: 700;
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: rgba(245, 245, 247, 0.35);
+  color: #AAAAAE;
   min-width: 80px;
   flex-shrink: 0;
 }
 .parsed-value {
   font-size: 0.85rem;
-  color: rgba(245, 245, 247, 0.85);
+  color: #D8D8DA;
   font-weight: 500;
 }
 .raw-text {
   font-family: 'Roboto Mono', 'Courier New', monospace;
   font-size: 0.72rem;
   line-height: 1.6;
-  color: rgba(245, 245, 247, 0.6);
+  color: #C4C4C8;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;

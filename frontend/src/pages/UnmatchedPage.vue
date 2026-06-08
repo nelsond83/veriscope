@@ -30,15 +30,18 @@
     <div v-for="r in unmatched" :key="r.id" class="q-mb-lg">
       <q-card class="vs-card">
         <!-- Report header -->
-        <q-card-section class="row items-center no-wrap q-pb-sm" style="gap:10px">
-          <BureauBadge :bureau="r.bureau" size="sm" />
+        <q-card-section class="row items-center no-wrap q-pb-sm" style="gap:14px">
+          <BureauBadge :bureau="r.bureau" size="md" :show-name="true" />
           <div class="col">
-            <div class="text-weight-medium text-white" style="font-size:0.9rem">{{ r.original_filename }}</div>
+            <div class="text-weight-medium text-white" style="font-size:1rem">{{ r.original_filename }}</div>
             <div class="text-caption text-grey-6">Uploaded {{ formatDate(r.uploaded_at) }}</div>
           </div>
-          <q-badge :color="statusColor(r.status)" :label="r.status_display" />
-          <q-btn flat dense icon="open_in_new" size="sm" color="grey-6"
-            :to="{ name: 'report-detail', params: { id: r.id } }" title="View report" />
+          <q-badge :color="statusColor(r.status)" :label="r.status_display"
+            style="font-size:0.75rem; padding:5px 10px" />
+          <q-btn flat round icon="open_in_new" size="md" color="grey-5"
+            :to="{ name: 'report-detail', params: { id: r.id }, query: { from: 'unmatched' } }" title="View report" />
+          <q-btn flat round icon="delete" size="md" color="negative"
+            :loading="deleting === r.id" title="Delete report" @click="confirmDelete(r)" />
         </q-card-section>
 
         <q-separator dark />
@@ -130,6 +133,7 @@ const identityOptions = ref([])
 const selections = ref({})
 const assigning = ref(null)
 const reparsing = ref(null)
+const deleting = ref(null)
 
 const statusColor = (s) => ({ parsed: 'positive', failed: 'negative', parsing: 'info', pending: 'grey' }[s] || 'grey')
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : ''
@@ -181,6 +185,30 @@ async function assign(report) {
   }
 }
 
+function confirmDelete(report) {
+  $q.dialog({
+    title: 'Delete Report?',
+    message: `Remove <strong>${report.original_filename}</strong> permanently? This cannot be undone.`,
+    html: true,
+    ok: { label: 'Delete', color: 'negative', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+    dark: true,
+  }).onOk(() => deleteReport(report))
+}
+
+async function deleteReport(report) {
+  deleting.value = report.id
+  try {
+    await api.delete(`/reports/${report.id}/`)
+    unmatched.value = unmatched.value.filter(r => r.id !== report.id)
+    $q.notify({ type: 'positive', message: 'Report deleted.' })
+  } catch {
+    $q.notify({ type: 'negative', message: 'Delete failed.' })
+  } finally {
+    deleting.value = null
+  }
+}
+
 async function reparse(report) {
   reparsing.value = report.id
   try {
@@ -200,7 +228,7 @@ onMounted(load)
 
 <style scoped>
 .unmatched-label {
-  color: rgba(245, 245, 247, 0.4);
+  color: #AAAAAE;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -208,7 +236,7 @@ onMounted(load)
   margin-bottom: 3px;
 }
 .unmatched-value {
-  color: rgba(245, 245, 247, 0.85);
+  color: #D8D8DA;
   font-size: 0.85rem;
   font-weight: 500;
 }

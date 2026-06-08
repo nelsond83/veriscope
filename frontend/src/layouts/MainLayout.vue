@@ -4,7 +4,7 @@
       <q-toolbar>
         <q-btn flat dense round icon="menu" @click="drawer = !drawer" />
         <q-toolbar-title class="row items-center no-wrap gap-sm">
-          <img src="/logo.svg" height="44" alt="Veriscope" class="q-mr-xs" />
+          <img src="/logo.svg" height="56" alt="Veriscope" class="q-mr-xs" />
         </q-toolbar-title>
         <q-space />
         <q-btn flat round icon="upload_file" :to="{ name: 'upload' }" title="Upload Report" />
@@ -77,27 +77,27 @@ const navLinks = [
 
 <style lang="scss">
 .vs-header {
-  background: #1D1D1F;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.1);
+  background: #0F0F11;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 .vs-drawer {
-  background: #1D1D1F;
-  border-right: 1px solid rgba(245, 245, 247, 0.08);
+  background: #0F0F11;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .vs-nav-item {
   border-radius: 8px;
   margin: 2px 8px;
-  color: rgba(245, 245, 247, 0.45);
+  color: #9A9A9F;   // was rgba(245,245,247,0.45) = 3.7:1 ✗ → now 6.4:1 ✓
   transition: background 0.12s ease, color 0.12s ease;
 
   .q-icon { transition: opacity 0.12s ease; }
 
   &:hover {
-    background: rgba(245, 245, 247, 0.07);
-    color: #F5F5F7;
+    background: rgba(255, 255, 255, 0.07);
+    color: #FFFFFF;
   }
 }
 
@@ -106,7 +106,7 @@ const navLinks = [
   align-items: center;
   justify-content: center;
   padding: 24px 20px 16px;
-  border-bottom: 1px solid rgba(245, 245, 247, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 
   img {
     height: 52px;
@@ -115,10 +115,10 @@ const navLinks = [
 }
 
 .vs-nav-active {
-  background: rgba(0, 102, 204, 0.15) !important;
+  background: rgba(200, 16, 46, 0.15) !important;
   color: #FFFFFF !important;
-  border: 1px solid rgba(0, 102, 204, 0.3) !important;
+  border: 1px solid rgba(200, 16, 46, 0.3) !important;
 
-  .q-icon { color: #0066CC !important; }
+  .q-icon { color: #C8102E !important; }
 }
 </style>

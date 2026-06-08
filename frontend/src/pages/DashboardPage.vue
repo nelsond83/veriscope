@@ -17,7 +17,7 @@
                   {{ stat.value }}
                 </div>
               </div>
-              <q-icon :name="stat.icon" size="36px" :color="stat.iconColor" class="q-ml-md" />
+              <q-icon :name="stat.icon" size="36px" :style="{ color: stat.color }" class="q-ml-md" />
             </div>
           </q-card-section>
         </q-card>
@@ -85,9 +85,9 @@ const recentReports = ref([])
 const flaggedIdentities = ref([])
 
 const stats = ref([
-  { label: 'Identities',  value: 0, icon: 'people',   color: '#0066CC', iconColor: 'primary',  to: { name: 'identities' } },
-  { label: 'Flagged',     value: 0, icon: 'flag',      color: '#ef4444', iconColor: 'negative', to: { name: 'identities', query: { dd_status: 'flagged' } } },
-  { label: 'Unmatched',   value: 0, icon: 'link_off',  color: '#94a3b8', iconColor: 'grey',     to: { name: 'unmatched' } },
+  { label: 'Identities', value: 0, icon: 'people',  color: '#FFB81C', to: { name: 'identities' } },
+  { label: 'Flagged',    value: 0, icon: 'flag',     color: '#C8102E', to: { name: 'identities', query: { dd_status: 'flagged' } } },
+  { label: 'Unmatched',  value: 0, icon: 'link_off', color: '#94a3b8', to: { name: 'unmatched' } },
 ])
 
 const statusColor = (s) => ({ parsed: 'positive', failed: 'negative', parsing: 'info', pending: 'grey' }[s] || 'grey')
@@ -122,7 +122,7 @@ onMounted(async () => {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .stat-card--clickable:hover {
-  border-color: rgba(0, 102, 204, 0.4) !important;
-  box-shadow: 0 2px 16px rgba(0, 102, 204, 0.15), 0 1px 0 rgba(255, 255, 255, 0.05) inset !important;
+  border-color: rgba(200, 16, 46, 0.4) !important;
+  box-shadow: 0 2px 16px rgba(200, 16, 46, 0.15), 0 1px 0 rgba(255, 255, 255, 0.05) inset !important;
 }
 </style>

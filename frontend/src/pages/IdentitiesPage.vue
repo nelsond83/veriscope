@@ -32,18 +32,19 @@
       >
         <template #body-cell-dd_status="props">
           <q-td :props="props">
-            <q-badge :color="ddColor(props.value)" :label="ddLabel(props.value)" />
+            <q-badge :color="ddColor(props.value)" :label="ddLabel(props.value)"
+              style="font-size:0.78rem; padding:5px 12px; font-weight:600; letter-spacing:0.3px" />
           </q-td>
         </template>
         <template #body-cell-bureaus="props">
           <q-td :props="props">
-            <div class="row no-wrap gap-xs">
+            <div class="row no-wrap justify-center gap-xs">
               <BureauBadge
                 v-for="b in ['equifax','experian','transunion']"
                 :key="b"
                 :bureau="b"
                 :show-name="false"
-                size="xs"
+                size="lg"
                 :class="hasBureau(props.row, b) ? '' : 'vs-bureau-missing'"
               />
             </div>
