@@ -1,20 +1,21 @@
 import csv
 import io
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityEmail, IdentityAccount, ComparisonResult
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult
 from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer
 from .services import run_comparison, auto_match_and_compare
 
 
 class IdentityViewSet(viewsets.ModelViewSet):
     queryset = Identity.objects.prefetch_related(
-        'reports', 'comparisons', 'addresses', 'name_variations', 'phones', 'emails', 'ref_accounts'
+        'reports', 'comparisons', 'addresses', 'name_variations', 'phones', 'ref_accounts'
     ).all()
 
     def get_serializer_class(self):
@@ -63,12 +64,18 @@ class IdentityViewSet(viewsets.ModelViewSet):
             if gender not in ('male', 'female', 'other', 'unknown'):
                 gender = ''
 
+            fico_range = row.get('expected_fico_range', '').strip()
+            valid_fico = {'800-850', '740-799', '670-739', '580-669', '300-579'}
+            if fico_range not in valid_fico:
+                fico_range = ''
+
             identity = Identity.objects.create(
                 full_name=name,
                 ssn=ssn,
                 date_of_birth=dob,
                 gender=gender,
                 notes=notes,
+                expected_fico_range=fico_range,
                 created_by=request.user,
             )
 
@@ -107,24 +114,45 @@ class IdentityViewSet(viewsets.ModelViewSet):
                 if number:
                     IdentityPhone.objects.create(identity=identity, number=number, order=i)
 
-            for i, raw in enumerate(row.get('emails', '').split(';')):
-                address = raw.strip()
-                if address:
-                    IdentityEmail.objects.create(identity=identity, address=address, order=i)
 
-            # Reference accounts: semicolon-separated "creditor|type|account_number|status"
+            # Reference accounts: semicolon-separated
+            # "creditor|type|acct_num|status|balance|credit_limit|high_bal|monthly_pmt|date_opened"
             for i, entry in enumerate(row.get('accounts', '').split(';')):
                 entry = entry.strip()
                 if not entry:
                     continue
                 parts = [p.strip() for p in entry.split('|')]
                 if len(parts) >= 1 and parts[0]:
+                    def _dec(s):
+                        if not s:
+                            return None
+                        try:
+                            return Decimal(s.replace('$', '').replace(',', ''))
+                        except InvalidOperation:
+                            return None
+
+                    def _dt(s):
+                        if not s:
+                            return None
+                        try:
+                            return datetime.strptime(s, '%m/%Y').date()
+                        except ValueError:
+                            try:
+                                return datetime.strptime(s, '%m/%d/%Y').date()
+                            except ValueError:
+                                return None
+
                     IdentityAccount.objects.create(
                         identity=identity,
                         creditor_name=parts[0],
                         account_type=parts[1] if len(parts) > 1 else '',
                         account_number=parts[2] if len(parts) > 2 else '',
                         status=parts[3] if len(parts) > 3 else '',
+                        balance=_dec(parts[4]) if len(parts) > 4 else None,
+                        credit_limit=_dec(parts[5]) if len(parts) > 5 else None,
+                        highest_balance=_dec(parts[6]) if len(parts) > 6 else None,
+                        monthly_payment=_dec(parts[7]) if len(parts) > 7 else None,
+                        date_opened=_dt(parts[8]) if len(parts) > 8 else None,
                         order=i,
                     )
 

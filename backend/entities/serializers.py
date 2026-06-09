@@ -22,8 +22,8 @@ class FinancialAccountSerializer(serializers.ModelSerializer):
         model = FinancialAccount
         fields = [
             'id', 'creditor_name', 'account_number', 'account_type', 'account_type_display',
-            'status', 'status_display', 'balance', 'credit_limit', 'monthly_payment',
-            'date_opened', 'date_closed', 'payment_status',
+            'status', 'status_display', 'balance', 'credit_limit', 'highest_balance',
+            'monthly_payment', 'account_address', 'date_opened', 'date_closed', 'payment_status',
         ]
 
 
@@ -36,6 +36,7 @@ class SubjectSerializer(serializers.ModelSerializer):
         model = Subject
         fields = [
             'id', 'report', 'full_name', 'ssn', 'ssn_last_four', 'date_of_birth',
+            'in_file_since', 'credit_score', 'score_type',
             'alternate_names', 'addresses', 'financial_accounts', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']

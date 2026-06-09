@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import datetime
 from rest_framework import serializers
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityEmail, IdentityAccount, ComparisonResult
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult
 
 
 class ComparisonResultSerializer(serializers.ModelSerializer):
@@ -39,17 +39,15 @@ class IdentityPhoneSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class IdentityEmailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = IdentityEmail
-        fields = ['id', 'address', 'email_type', 'order']
-        read_only_fields = ['id']
-
 
 class IdentityAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = IdentityAccount
-        fields = ['id', 'creditor_name', 'account_type', 'account_number', 'status', 'order']
+        fields = [
+            'id', 'creditor_name', 'account_type', 'account_number', 'status',
+            'balance', 'credit_limit', 'highest_balance', 'monthly_payment',
+            'date_opened', 'account_address', 'order',
+        ]
         read_only_fields = ['id']
 
 
@@ -61,15 +59,15 @@ class IdentitySerializer(serializers.ModelSerializer):
     addresses = IdentityAddressSerializer(many=True, required=False)
     name_variations = IdentityNameVariationSerializer(many=True, required=False)
     phones = IdentityPhoneSerializer(many=True, required=False)
-    emails = IdentityEmailSerializer(many=True, required=False)
     ref_accounts = IdentityAccountSerializer(many=True, required=False)
 
     class Meta:
         model = Identity
         fields = [
             'id', 'full_name', 'ssn', 'date_of_birth', 'gender',
-            'addresses', 'name_variations', 'phones', 'emails', 'ref_accounts',
-            'notes', 'dd_status', 'report_count', 'reports_by_bureau',
+            'addresses', 'name_variations', 'phones', 'ref_accounts',
+            'notes', 'expected_fico_range',
+            'dd_status', 'report_count', 'reports_by_bureau',
             'created_by_username', 'created_at',
         ]
         read_only_fields = ['id', 'created_at']
@@ -80,11 +78,12 @@ class IdentitySerializer(serializers.ModelSerializer):
     def get_reports_by_bureau(self, obj):
         return {r.bureau: {'id': str(r.id), 'status': r.status} for r in obj.reports.all()}
 
-    def _save_related(self, identity, addresses_data, name_variations_data, phones_data, emails_data, ref_accounts_data):
+    def _save_related(self, identity, addresses_data, name_variations_data, phones_data, ref_accounts_data):
         if addresses_data is not None:
             identity.addresses.all().delete()
             for i, item in enumerate(addresses_data):
                 item.pop('id', None)
+                item.pop('order', None)
                 IdentityAddress.objects.create(identity=identity, order=i, **item)
         if name_variations_data is not None:
             identity.name_variations.all().delete()
@@ -95,38 +94,33 @@ class IdentitySerializer(serializers.ModelSerializer):
             identity.phones.all().delete()
             for i, item in enumerate(phones_data):
                 item.pop('id', None)
+                item.pop('order', None)
                 IdentityPhone.objects.create(identity=identity, order=i, **item)
-        if emails_data is not None:
-            identity.emails.all().delete()
-            for i, item in enumerate(emails_data):
-                item.pop('id', None)
-                IdentityEmail.objects.create(identity=identity, order=i, **item)
         if ref_accounts_data is not None:
             identity.ref_accounts.all().delete()
             for i, item in enumerate(ref_accounts_data):
                 item.pop('id', None)
+                item.pop('order', None)
                 IdentityAccount.objects.create(identity=identity, order=i, **item)
 
     def create(self, validated_data):
         addresses_data = validated_data.pop('addresses', [])
         name_variations_data = validated_data.pop('name_variations', [])
         phones_data = validated_data.pop('phones', [])
-        emails_data = validated_data.pop('emails', [])
         ref_accounts_data = validated_data.pop('ref_accounts', [])
         identity = Identity.objects.create(**validated_data)
-        self._save_related(identity, addresses_data, name_variations_data, phones_data, emails_data, ref_accounts_data)
+        self._save_related(identity, addresses_data, name_variations_data, phones_data, ref_accounts_data)
         return identity
 
     def update(self, instance, validated_data):
         addresses_data = validated_data.pop('addresses', None)
         name_variations_data = validated_data.pop('name_variations', None)
         phones_data = validated_data.pop('phones', None)
-        emails_data = validated_data.pop('emails', None)
         ref_accounts_data = validated_data.pop('ref_accounts', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        self._save_related(instance, addresses_data, name_variations_data, phones_data, emails_data, ref_accounts_data)
+        self._save_related(instance, addresses_data, name_variations_data, phones_data, ref_accounts_data)
         return instance
 
 

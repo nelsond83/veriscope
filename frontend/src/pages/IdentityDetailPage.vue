@@ -26,7 +26,7 @@
         </div>
 
         <!-- Core fields row -->
-        <div class="row q-col-gutter-md q-mb-md">
+        <div class="row q-col-gutter-md q-mb-sm">
           <div class="col-xs-12 col-sm-3">
             <div class="ref-label">Full Name</div>
             <div class="ref-value">{{ identity.full_name }}</div>
@@ -44,41 +44,44 @@
             <div class="ref-value">{{ identity.date_of_birth || '—' }}</div>
           </div>
         </div>
+        <div class="row q-col-gutter-md q-mb-md">
+          <div class="col-xs-6 col-sm-3">
+            <div class="ref-label">In File Since</div>
+            <div class="ref-value">{{ fmtFullDate(identity.created_at) || '—' }}</div>
+          </div>
+          <div class="col-xs-6 col-sm-5">
+            <div class="ref-label">Expected FICO / Advantage Score Range</div>
+            <div v-if="identity.expected_fico_range" class="row items-center" style="gap:8px; margin-top:2px">
+              <q-badge :color="ficoBadgeColor(identity.expected_fico_range)" :label="identity.expected_fico_range"
+                style="font-size:0.75rem; padding:4px 10px" />
+              <span style="color:#AAAAAE; font-size:0.8rem">{{ ficoRatingLabel(identity.expected_fico_range) }}</span>
+            </div>
+            <div v-else class="ref-value" style="color:#AAAAAE">—</div>
+          </div>
+        </div>
 
         <!-- Name variations -->
         <template v-if="identity.name_variations?.length">
           <div class="ref-label q-mb-xs">Also Known As</div>
-          <div class="row q-col-gutter-xs q-mb-md">
-            <div v-for="v in identity.name_variations" :key="v.id" class="col-auto">
-              <q-chip dense dark color="blue-grey-9" style="font-size:0.8rem">
-                {{ v.name }}
-                <span v-if="v.note" style="opacity:.55; font-size:0.7rem; margin-left:4px">({{ v.note }})</span>
-              </q-chip>
+          <div class="q-mb-md">
+            <div v-for="v in identity.name_variations" :key="v.id"
+              style="font-size:0.85rem; color:#FFFFFF; line-height:1.7">
+              {{ v.name }}
+              <span v-if="v.note" style="color:#AAAAAE; font-size:0.75rem; margin-left:4px">({{ v.note }})</span>
             </div>
           </div>
         </template>
 
-        <!-- Contact: phones then emails, stacked -->
-        <template v-if="identity.phones?.length || identity.emails?.length">
+        <!-- Phone numbers -->
+        <template v-if="identity.phones?.length">
+          <div class="ref-label q-mb-xs">Phone Numbers</div>
           <div class="q-mb-md">
-            <template v-if="identity.phones?.length">
-              <div class="ref-label q-mb-xs">Phone Numbers</div>
-              <div v-for="(p, i) in identity.phones" :key="p.id || i"
-                class="row items-center q-mb-xs" style="gap:6px">
-                <q-icon name="phone" size="13px" style="color:#AAAAAE" />
-                <span class="ref-value" style="font-size:0.85rem">{{ p.number }}</span>
-                <span style="color:#AAAAAE; font-size:0.7rem; text-transform:capitalize">{{ p.phone_type }}</span>
-              </div>
-            </template>
-            <template v-if="identity.emails?.length">
-              <div class="ref-label q-mb-xs" :class="identity.phones?.length ? 'q-mt-sm' : ''">Email Addresses</div>
-              <div v-for="(e, i) in identity.emails" :key="e.id || i"
-                class="row items-center q-mb-xs" style="gap:6px">
-                <q-icon name="email" size="13px" style="color:#AAAAAE" />
-                <span class="ref-value" style="font-size:0.85rem">{{ e.address }}</span>
-                <span style="color:#AAAAAE; font-size:0.7rem; text-transform:capitalize">{{ e.email_type }}</span>
-              </div>
-            </template>
+            <div v-for="(p, i) in identity.phones" :key="p.id || i"
+              class="row items-center q-mb-xs" style="gap:6px">
+              <q-icon name="phone" size="13px" style="color:#AAAAAE" />
+              <span class="ref-value" style="font-size:0.85rem">{{ p.number }}</span>
+              <span style="color:#AAAAAE; font-size:0.7rem; text-transform:capitalize">{{ p.phone_type }}</span>
+            </div>
           </div>
         </template>
 
@@ -115,21 +118,33 @@
         <!-- Reference Accounts -->
         <template v-if="identity.ref_accounts?.length">
           <div class="ref-label q-mb-sm q-mt-sm">Reference Accounts</div>
-          <div class="ref-accounts-table q-mb-md">
-            <div class="ref-accounts-header">
-              <span>Creditor</span>
-              <span>Type</span>
-              <span>Account #</span>
-              <span>Status</span>
+          <div class="ref-acct-grid q-mb-md">
+            <div class="rag-header">
+              <div>Creditor</div>
+              <div>Type</div>
+              <div>Account #</div>
+              <div>Status</div>
+              <div class="rag-r">Balance</div>
+              <div class="rag-r">Limit</div>
+              <div class="rag-r">High Bal</div>
+              <div class="rag-r">Mthly Pmt</div>
+              <div class="rag-r">Opened</div>
             </div>
-            <div v-for="(acct, i) in identity.ref_accounts" :key="acct.id || i" class="ref-accounts-row">
-              <span class="ref-acct-name">{{ acct.creditor_name }}</span>
-              <span class="ref-acct-cell">{{ acct.account_type || '—' }}</span>
-              <span class="ref-acct-cell" style="font-family:monospace">{{ acct.account_number || '—' }}</span>
-              <span class="ref-acct-cell">
-                <q-badge dense :color="acctStatusColor(acct.status)" :label="acct.status || '—'"
-                  style="font-size:0.62rem" />
-              </span>
+            <div v-for="(acct, i) in identity.ref_accounts" :key="acct.id || i" class="rag-row">
+              <div class="rag-creditor">{{ acct.creditor_name }}</div>
+              <div class="rag-type">{{ acct.account_type || '—' }}</div>
+              <div class="rag-acctnum">{{ fmtAcctNum(acct.account_number) }}</div>
+              <div>
+                <q-badge v-if="acct.status" dense :color="acctStatusColor(acct.status)"
+                  :label="acct.status" style="font-size:0.56rem" />
+                <span v-else style="font-size:0.7rem;color:#AAAAAE">—</span>
+              </div>
+              <div class="rag-r rag-num">{{ acct.balance != null ? fmtCurrency(acct.balance) : '—' }}</div>
+              <div class="rag-r rag-num">{{ acct.credit_limit != null ? fmtCurrency(acct.credit_limit) : '—' }}</div>
+              <div class="rag-r rag-num">{{ acct.highest_balance != null ? fmtCurrency(acct.highest_balance) : '—' }}</div>
+              <div class="rag-r rag-num">{{ acct.monthly_payment != null ? fmtCurrency(acct.monthly_payment) : '—' }}</div>
+              <div class="rag-r rag-date">{{ acct.date_opened ? fmtDate(acct.date_opened) : '—' }}</div>
+              <div v-if="acct.account_address" class="rag-address">{{ acct.account_address }}</div>
             </div>
           </div>
         </template>
@@ -171,9 +186,9 @@
             </div>
           </q-card-section>
 
-          <!-- Fields -->
+          <!-- Fields + credit info (shown when report exists) -->
           <template v-else>
-            <q-list dense class="col">
+            <q-list dense>
               <q-item v-for="field in FIELDS" :key="field.key" class="q-py-md">
                 <q-item-section>
                   <div class="field-label q-mb-xs">{{ field.label }}</div>
@@ -206,6 +221,48 @@
                   <span v-else class="field-value" style="color:#AAAAAE">—</span>
                 </q-item-section>
               </q-item>
+
+              <!-- Credit Score row -->
+              <q-item v-if="reportFor(b)?.subject?.credit_score" class="q-py-md">
+                <q-item-section>
+                  <div class="field-label q-mb-xs">{{ reportFor(b).subject.score_type || 'Credit Score' }}</div>
+                  <template v-if="cellResult('credit_score', b)">
+                    <div class="row items-center no-wrap" style="gap:5px">
+                      <q-icon
+                        :name="matchIcon(cellResult('credit_score', b).match_status)"
+                        :color="matchColor(cellResult('credit_score', b).match_status)"
+                        size="15px" style="flex-shrink:0" />
+                      <div>
+                        <span class="field-value"
+                          :style="{ color: matchTextColor(cellResult('credit_score', b).match_status) }">
+                          {{ cellResult('credit_score', b).report_value || '—' }}
+                        </span>
+                        <div v-if="cellResult('credit_score', b).match_status === 'mismatch'"
+                          style="font-size:0.65rem; color:#FF6B6B; font-weight:600; letter-spacing:0.3px; margin-top:2px">
+                          MISMATCH — on file: {{ cellResult('credit_score', b).identity_value || '—' }}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <span v-else class="field-value"
+                    :style="{ color: ficoScoreColor(reportFor(b).subject.credit_score) }">
+                    {{ reportFor(b).subject.credit_score }}
+                  </span>
+                </q-item-section>
+              </q-item>
+
+              <!-- In File Since row -->
+              <q-item v-if="reportFor(b)?.subject?.in_file_since" class="q-py-md">
+                <q-item-section>
+                  <div class="field-label q-mb-xs">In File Since</div>
+                  <div class="row items-center no-wrap" style="gap:5px">
+                    <q-icon name="check_circle" color="positive" size="15px" style="flex-shrink:0" />
+                    <span class="field-value" style="color:#34C759">
+                      {{ fmtDate(reportFor(b).subject.in_file_since) }}
+                    </span>
+                  </div>
+                </q-item-section>
+              </q-item>
             </q-list>
 
             <!-- Addresses: reference addresses checked against bureau, then extra bureau addresses -->
@@ -214,52 +271,42 @@
               <div class="q-pa-md">
                 <div class="field-label q-mb-sm">Addresses</div>
 
-                <!-- Reference addresses: check each against bureau report -->
-                <div v-for="(refAddr, i) in identity.addresses" :key="'ref-addr-' + refAddr.id"
+                <!-- All addresses: ref first, then bureau-only -->
+                <div v-for="(addr, i) in allAddrs(b)" :key="addr._kind + '-' + (addr.id || i)"
                   class="bureau-addr-row" :class="i > 0 ? 'q-mt-sm' : ''">
-                  <div class="row items-start no-wrap" style="gap:7px">
+                  <div v-if="addr._kind === 'ref'" class="row items-start no-wrap" style="gap:7px">
                     <q-icon
-                      :name="refAddrInBureau(refAddr, b) ? 'check_circle' : 'cancel'"
-                      :color="refAddrInBureau(refAddr, b) ? 'positive' : 'negative'"
+                      :name="refAddrInBureau(addr, b) ? 'check_circle' : 'cancel'"
+                      :color="refAddrInBureau(addr, b) ? 'positive' : 'negative'"
                       size="14px" style="margin-top:2px; flex-shrink:0" />
                     <div>
                       <div class="row items-center no-wrap" style="gap:5px">
-                        <span :style="{ fontSize:'0.79rem', lineHeight:'1.3', color: refAddrInBureau(refAddr, b) ? '#34C759' : '#FF6B6B' }">{{ refAddr.street }}</span>
+                        <span :style="{ fontSize:'0.79rem', lineHeight:'1.3', color: refAddrInBureau(addr, b) ? '#34C759' : '#FF6B6B' }">{{ addr.street }}</span>
                         <q-badge v-if="i === 0" dense label="Current" color="blue-grey-9"
                           style="font-size:0.52rem; padding:1px 5px" />
                       </div>
-                      <div :style="{ fontSize:'0.72rem', marginTop:'1px', color: refAddrInBureau(refAddr, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">
-                        {{ [refAddr.city, refAddr.state, refAddr.zip_code].filter(Boolean).join(', ') }}
+                      <div :style="{ fontSize:'0.72rem', marginTop:'1px', color: refAddrInBureau(addr, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">
+                        {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
                       </div>
-                      <div v-if="!refAddrInBureau(refAddr, b)"
+                      <div v-if="!refAddrInBureau(addr, b)"
                         style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
                         NOT IN REPORT
                       </div>
                     </div>
                   </div>
-                </div>
-
-                <!-- Extra bureau addresses not in reference -->
-                <template v-if="unknownBureauAddrs(b).length">
-                  <div style="font-size:0.6rem; color:#606064; text-transform:uppercase; letter-spacing:0.6px; margin: 10px 0 5px">
-                    Additional bureau addresses
-                  </div>
-                  <div v-for="(addr, i) in unknownBureauAddrs(b)" :key="'unk-addr-' + i"
-                    class="bureau-addr-row" :class="i > 0 ? 'q-mt-sm' : ''">
-                    <div class="row items-start no-wrap" style="gap:7px">
-                      <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
-                      <div>
-                        <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.3">{{ addr.street }}</span>
-                        <div style="font-size:0.72rem; color:rgba(255,107,107,0.65); margin-top:1px">
-                          {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
-                        </div>
-                        <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
-                          NOT IN REFERENCE DATA
-                        </div>
+                  <div v-else class="row items-start no-wrap" style="gap:7px">
+                    <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
+                    <div>
+                      <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.3">{{ addr.street }}</span>
+                      <div style="font-size:0.72rem; color:rgba(255,107,107,0.65); margin-top:1px">
+                        {{ [addr.city, addr.state, addr.zip_code].filter(Boolean).join(', ') }}
+                      </div>
+                      <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                        NOT IN REFERENCE DATA
                       </div>
                     </div>
                   </div>
-                </template>
+                </div>
               </div>
             </template>
 
@@ -281,48 +328,75 @@
                 </div>
 
                 <template v-else>
-                  <!-- Reference accounts: check each against bureau report -->
-                  <div v-for="(refAcct, i) in identity.ref_accounts" :key="'ref-' + refAcct.id"
-                    class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''">
-                    <div class="row items-start no-wrap" style="gap:7px">
+                  <!-- All accounts: ref first, then bureau-only -->
+                  <div v-for="(acct, i) in allAccts(b)" :key="acct._kind + '-' + (acct.id || i)"
+                    class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''"
+                    style="cursor:pointer" @click="toggleAcct(acctKey(acct, b))">
+                    <div v-if="acct._kind === 'ref'" class="row items-start no-wrap" style="gap:7px">
                       <q-icon
-                        :name="refAcctInBureau(refAcct, b) ? 'check_circle' : 'cancel'"
-                        :color="refAcctInBureau(refAcct, b) ? 'positive' : 'negative'"
+                        :name="refAcctInBureau(acct, b) ? 'check_circle' : 'cancel'"
+                        :color="refAcctInBureau(acct, b) ? 'positive' : 'negative'"
                         size="14px" style="margin-top:2px; flex-shrink:0" />
-                      <div>
+                      <div style="flex:1">
                         <div class="row items-center" style="gap:5px; flex-wrap:wrap">
-                          <span :style="{ fontSize:'0.79rem', lineHeight:'1.4', color: refAcctInBureau(refAcct, b) ? '#34C759' : '#FF6B6B' }">{{ refAcct.creditor_name }}</span>
-                          <span v-if="refAcct.account_number" :style="{ fontFamily:'monospace', fontSize:'0.7rem', color: refAcctInBureau(refAcct, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">{{ refAcct.account_number }}</span>
+                          <span :style="{ fontSize:'0.79rem', lineHeight:'1.4', color: refAcctInBureau(acct, b) ? '#34C759' : '#FF6B6B' }">{{ acct.creditor_name }}</span>
+                          <span v-if="acct.account_number" :style="{ fontFamily:'monospace', fontSize:'0.7rem', color: refAcctInBureau(acct, b) ? 'rgba(52,199,89,0.65)' : 'rgba(255,107,107,0.65)' }">{{ acct.account_number }}</span>
                         </div>
-                        <div v-if="!refAcctInBureau(refAcct, b)"
+                        <div v-if="!refAcctInBureau(acct, b)"
                           style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
                           NOT IN REPORT
                         </div>
                       </div>
+                      <q-icon v-if="bureauAcctDetail(acct, b)"
+                        :name="expandedAccts.has(acctKey(acct, b)) ? 'expand_less' : 'expand_more'"
+                        size="14px" style="color:#606064; margin-top:2px; flex-shrink:0" />
                     </div>
-                  </div>
-
-                  <!-- Bureau accounts not in reference -->
-                  <template v-if="unknownBureauAccts(b).length">
-                    <div style="font-size:0.6rem; color:#606064; text-transform:uppercase; letter-spacing:0.6px; margin: 10px 0 5px">
-                      Additional bureau accounts
+                    <div v-else class="row items-start no-wrap" style="gap:7px">
+                      <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
+                      <div style="flex:1">
+                        <div class="row items-center" style="gap:5px; flex-wrap:wrap">
+                          <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.4">{{ acct.creditor_name }}</span>
+                          <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:rgba(255,107,107,0.65)">{{ acct.account_number }}</span>
+                        </div>
+                        <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
+                          NOT IN REFERENCE DATA
+                        </div>
+                      </div>
+                      <q-icon v-if="bureauAcctDetail(acct, b)"
+                        :name="expandedAccts.has(acctKey(acct, b)) ? 'expand_less' : 'expand_more'"
+                        size="14px" style="color:#606064; margin-top:2px; flex-shrink:0" />
                     </div>
-                    <div v-for="(acct, i) in unknownBureauAccts(b)" :key="'unk-' + i"
-                      class="bureau-acct-row" :class="i > 0 ? 'q-mt-xs' : ''">
-                      <div class="row items-start no-wrap" style="gap:7px">
-                        <q-icon name="cancel" color="negative" size="14px" style="margin-top:2px; flex-shrink:0" />
-                        <div>
-                          <div class="row items-center" style="gap:5px; flex-wrap:wrap">
-                            <span style="font-size:0.79rem; color:#FF6B6B; line-height:1.4">{{ acct.creditor_name }}</span>
-                            <span v-if="acct.account_number" style="font-family:monospace; font-size:0.7rem; color:rgba(255,107,107,0.65)">{{ acct.account_number }}</span>
-                          </div>
-                          <div style="font-size:0.65rem; color:#FF6B6B; margin-top:2px; font-weight:600; letter-spacing:0.3px">
-                            NOT IN REFERENCE DATA
-                          </div>
+                    <!-- Expanded detail panel -->
+                    <div v-if="expandedAccts.has(acctKey(acct, b)) && bureauAcctDetail(acct, b)"
+                      class="bureau-acct-detail">
+                      <div class="row q-mt-xs" style="gap:6px 14px; flex-wrap:wrap">
+                        <div v-if="bureauAcctDetail(acct, b).date_opened" class="detail-item">
+                          <span class="detail-label">Opened</span>
+                          <span class="detail-value">{{ bureauAcctDetail(acct, b).date_opened }}</span>
+                        </div>
+                        <div v-if="bureauAcctDetail(acct, b).balance != null" class="detail-item">
+                          <span class="detail-label">Balance</span>
+                          <span class="detail-value">{{ fmtCurrency(bureauAcctDetail(acct, b).balance) }}</span>
+                        </div>
+                        <div v-if="bureauAcctDetail(acct, b).highest_balance != null" class="detail-item">
+                          <span class="detail-label">High Balance</span>
+                          <span class="detail-value">{{ fmtCurrency(bureauAcctDetail(acct, b).highest_balance) }}</span>
+                        </div>
+                        <div v-if="bureauAcctDetail(acct, b).credit_limit != null" class="detail-item">
+                          <span class="detail-label">Limit</span>
+                          <span class="detail-value">{{ fmtCurrency(bureauAcctDetail(acct, b).credit_limit) }}</span>
+                        </div>
+                        <div v-if="bureauAcctDetail(acct, b).monthly_payment != null" class="detail-item">
+                          <span class="detail-label">Monthly Pmt</span>
+                          <span class="detail-value">{{ fmtCurrency(bureauAcctDetail(acct, b).monthly_payment) }}</span>
+                        </div>
+                        <div v-if="bureauAcctDetail(acct, b).account_address" class="detail-item detail-item--full">
+                          <span class="detail-label">Account Address</span>
+                          <span class="detail-value">{{ bureauAcctDetail(acct, b).account_address }}</span>
                         </div>
                       </div>
                     </div>
-                  </template>
+                  </div>
                 </template>
               </div>
             </template>
@@ -465,23 +539,6 @@
               @click="editForm.phones.splice(i,1)" />
           </div>
 
-          <!-- Emails -->
-          <div class="row items-center q-mb-xs q-mt-sm">
-            <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Email Addresses</span>
-            <q-space />
-            <q-btn flat dense size="sm" icon="add" color="primary"
-              @click="editForm.emails.push({ address:'', email_type:'personal' })" />
-          </div>
-          <div v-for="(e, i) in editForm.emails" :key="i"
-            class="row q-gutter-xs q-mb-xs items-center">
-            <q-input v-model="e.address" label="Email" dark filled dense class="col" />
-            <q-select v-model="e.email_type"
-              :options="[{label:'Personal',value:'personal'},{label:'Work',value:'work'},{label:'Other',value:'other'}]"
-              emit-value map-options dark filled dense style="max-width:100px" />
-            <q-btn flat round dense icon="close" size="xs" color="grey-6"
-              @click="editForm.emails.splice(i,1)" />
-          </div>
-
           <!-- Addresses -->
           <div class="row items-center q-mb-xs q-mt-sm">
             <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Addresses</span>
@@ -508,6 +565,43 @@
             </div>
           </div>
 
+          <!-- Reference Accounts -->
+          <div class="row items-center q-mb-xs q-mt-sm">
+            <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Reference Accounts</span>
+            <q-space />
+            <q-btn flat dense size="sm" icon="add" color="primary"
+              @click="editForm.ref_accounts.push({ creditor_name:'', account_type:'', account_number:'', status:'open', balance:null, credit_limit:null, highest_balance:null, monthly_payment:null, date_opened:'', account_address:'' })" />
+          </div>
+          <div v-for="(acct, i) in editForm.ref_accounts" :key="i"
+            class="q-mb-sm q-pa-sm" style="border:1px solid rgba(245,245,247,0.08); border-radius:8px">
+            <div class="row items-center q-gutter-xs q-mb-xs">
+              <q-input v-model="acct.creditor_name" label="Creditor" dark filled dense class="col" />
+              <q-input v-model="acct.account_number" label="Account #" dark filled dense style="max-width:120px" />
+              <q-btn flat round dense icon="close" size="xs" color="grey-6" @click="editForm.ref_accounts.splice(i,1)" />
+            </div>
+            <div class="row q-gutter-xs q-mb-xs">
+              <q-select v-model="acct.account_type"
+                :options="['credit card','auto loan','mortgage','student loan','personal loan','collection','medical','other']"
+                dark filled dense label="Type" class="col" clearable />
+              <q-select v-model="acct.status"
+                :options="['open','closed','derogatory','collection','charged off']"
+                dark filled dense label="Status" style="max-width:120px" />
+            </div>
+            <div class="row q-gutter-xs q-mb-xs">
+              <q-input v-model.number="acct.balance" label="Balance ($)" dark filled dense type="number" class="col" />
+              <q-input v-model.number="acct.credit_limit" label="Limit ($)" dark filled dense type="number" class="col" />
+              <q-input v-model.number="acct.highest_balance" label="High Bal ($)" dark filled dense type="number" class="col" />
+            </div>
+            <div class="row q-gutter-xs">
+              <q-input v-model.number="acct.monthly_payment" label="Monthly Pmt ($)" dark filled dense type="number" class="col" />
+              <q-input v-model="acct.date_opened" label="Opened (YYYY-MM-DD)" dark filled dense class="col" />
+              <q-input v-model="acct.account_address" label="Address" dark filled dense class="col-12 q-mt-xs" />
+            </div>
+          </div>
+
+          <q-select v-model="editForm.expected_fico_range" label="Expected FICO Score Range (optional)"
+            dark filled clearable :options="FICO_RANGES" emit-value map-options class="q-mt-sm"
+            hint="When set, credit score on reports will be compared to this range" />
           <q-input v-model="editForm.notes" label="Notes" dark filled type="textarea" autogrow class="q-mt-sm" />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
@@ -563,6 +657,110 @@ const editForm = ref({})
 
 const BUREAUS = ['equifax', 'experian', 'transunion']
 
+const FICO_RANGES = [
+  { label: '800–850 (Exceptional)', value: '800-850' },
+  { label: '740–799 (Very Good)', value: '740-799' },
+  { label: '670–739 (Good)', value: '670-739' },
+  { label: '580–669 (Fair)', value: '580-669' },
+  { label: '300–579 (Poor)', value: '300-579' },
+]
+
+const expandedAccts = ref(new Set())
+const expandedRefAccts = ref(new Set())
+
+function toggleRefAcct(key) {
+  const s = new Set(expandedRefAccts.value)
+  s.has(key) ? s.delete(key) : s.add(key)
+  expandedRefAccts.value = s
+}
+
+function fmtAcctNum(num) {
+  if (!num) return '—'
+  const d = String(num).replace(/\D/g, '')
+  if (d.length === 16) return `${d.slice(0,4)} ${d.slice(4,8)} ${d.slice(8,12)} ${d.slice(12)}`
+  return num
+}
+
+function refAcctHasExtraDetail(acct) {
+  return !!(acct.highest_balance != null || acct.monthly_payment != null || acct.account_address)
+}
+
+function acctKey(acct, b) {
+  return `${b}-${acct._kind}-${acct.id || acct.creditor_name}-${acct.account_number || ''}`
+}
+
+function toggleAcct(key) {
+  const s = new Set(expandedAccts.value)
+  s.has(key) ? s.delete(key) : s.add(key)
+  expandedAccts.value = s
+}
+
+function bureauAcctDetail(acct, b) {
+  const bureauAccts = reportFor(b)?.subject?.financial_accounts || []
+  if (acct._kind === 'bureau') return acct
+  return bureauAccts.find(ba => acctPairMatches(acct, ba)) || null
+}
+
+function fmtCurrency(val) {
+  if (val == null) return '—'
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val)
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr + 'T12:00:00Z')
+    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+  } catch {
+    return dateStr
+  }
+}
+
+function fmtFullDate(dateStr) {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  } catch {
+    return dateStr
+  }
+}
+
+function ficoScoreColor(score) {
+  if (!score) return '#EBEBED'
+  if (score >= 800) return '#34C759'
+  if (score >= 740) return '#30D158'
+  if (score >= 670) return '#EBEBED'
+  if (score >= 580) return '#FF9500'
+  return '#FF6B6B'
+}
+
+function ficoRangeStatus(b) {
+  const score = reportFor(b)?.subject?.credit_score
+  const range = identity.value?.expected_fico_range
+  if (!score || !range) return null
+  const [low, high] = range.split('-').map(Number)
+  if (isNaN(low) || isNaN(high)) return null
+  return (score >= low && score <= high) ? 'match' : 'mismatch'
+}
+
+function ficoBadgeColor(range) {
+  const low = parseInt((range || '').split('-')[0])
+  if (low >= 800) return 'positive'
+  if (low >= 740) return 'teal'
+  if (low >= 670) return 'grey-7'
+  if (low >= 580) return 'orange'
+  return 'negative'
+}
+
+function ficoRatingLabel(range) {
+  const labels = {
+    '800-850': 'Exceptional', '740-799': 'Very Good', '670-739': 'Good',
+    '580-669': 'Fair', '300-579': 'Poor',
+  }
+  return labels[range] || ''
+}
+
 const identityCurrentAddr = computed(() => {
   const addrs = identity.value?.addresses || []
   return addrs.find(a => a.address_type === 'current') || addrs[0] || null
@@ -614,6 +812,18 @@ function refAcctInBureau(refAcct, b) {
 // Bureau accounts not matched by any reference account
 function unknownBureauAccts(b) {
   return (reportFor(b)?.subject?.financial_accounts || []).filter(acct => !acctInRef(acct))
+}
+
+function allAddrs(b) {
+  const ref = (identity.value?.addresses || []).map(a => ({ ...a, _kind: 'ref' }))
+  const unk = unknownBureauAddrs(b).map(a => ({ ...a, _kind: 'bureau' }))
+  return [...ref, ...unk]
+}
+
+function allAccts(b) {
+  const ref = (identity.value?.ref_accounts || []).map(a => ({ ...a, _kind: 'ref' }))
+  const unk = unknownBureauAccts(b).map(a => ({ ...a, _kind: 'bureau' }))
+  return [...ref, ...unk]
 }
 
 const FIELDS = [
@@ -734,7 +944,7 @@ function openEdit() {
     addresses: addresses.length ? addresses : [{ street: '', city: '', state: '', zip_code: '', address_type: 'current' }],
     name_variations: (identity.value.name_variations || []).map(v => ({ ...v })),
     phones: (identity.value.phones || []).map(p => ({ ...p })),
-    emails: (identity.value.emails || []).map(e => ({ ...e })),
+    ref_accounts: (identity.value.ref_accounts || []).map(a => ({ ...a })),
   }
   showEdit.value = true
 }
@@ -829,6 +1039,92 @@ onMounted(load)
   line-height: 1.4;
 }
 
+.ref-acct-grid {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.rag-header,
+.rag-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.6fr 0.6fr 1fr 1fr 1fr 1fr 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+  min-width: 1000px;
+}
+
+.rag-header {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #AAAAAE;
+}
+
+.rag-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.rag-row:last-child {
+  border-bottom: none;
+}
+
+.rag-creditor {
+  font-size: 0.82rem;
+  color: #FFFFFF;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.rag-type {
+  font-size: 0.75rem;
+  color: #AAAAAE;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.rag-acctnum {
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: #AAAAAE;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.rag-num {
+  font-size: 0.76rem;
+  color: #C4C4C8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rag-r {
+  text-align: right;
+}
+
+.rag-date {
+  font-size: 0.76rem;
+  color: #C4C4C8;
+  white-space: nowrap;
+}
+
+.rag-address {
+  grid-column: 1 / -1;
+  font-size: 0.65rem;
+  color: #888890;
+  padding: 1px 0 3px;
+}
+
 .bureau-addr-row {
   padding: 4px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -845,6 +1141,37 @@ onMounted(load)
 
 .bureau-acct-row:last-child {
   border-bottom: none;
+}
+
+.bureau-acct-detail {
+  padding: 6px 0 4px 21px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.detail-item--full {
+  flex: 0 0 100%;
+}
+
+.detail-label {
+  font-size: 0.58rem;
+  color: #AAAAAE;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+.detail-value {
+  font-size: 0.78rem;
+  color: #EBEBED;
 }
 
 .field-label {

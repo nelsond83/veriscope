@@ -72,6 +72,7 @@ const navLinks = [
   { label: 'Identities',      icon: 'people',      to: '/identities' },
   { label: 'Unmatched',       icon: 'link_off',    to: '/unmatched' },
   { label: 'Upload Reports',  icon: 'upload_file', to: '/upload' },
+  { label: 'Doc Templates',   icon: 'rule',        to: '/templates' },
 ]
 </script>
 

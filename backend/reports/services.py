@@ -101,6 +101,12 @@ def extract_dob(text: str) -> date | None:
 
 
 def extract_alternate_names(text: str) -> list[str]:
+    _STOP = re.compile(
+        r'\b(?:ADDRESS(?:\s+HISTORY)?|ACCOUNT(?:\s+SUMMARY)?|Current\s+Address|'
+        r'Previous\s+Address|EMPLOYMENT|PAYMENT\s+HISTORY|CREDIT\s+INQUIR|'
+        r'ADVERSE|BANKRUPTCY|SECTION)\b',
+        re.IGNORECASE,
+    )
     patterns = [
         r'(?:Also Known As|AKA|Other Names?|Previous Names?|Aliases?)[:\s]+((?:[A-Z][A-Za-z,.\s-]+\n?)+)',
     ]
@@ -111,6 +117,10 @@ def extract_alternate_names(text: str) -> list[str]:
             block = match.group(1)
             for line in block.split('\n'):
                 name = line.strip().rstrip(',')
+                if not name:
+                    break  # blank line marks end of the names block
+                if _STOP.search(name):
+                    break  # hit a section header — stop
                 if len(name) >= 4 and re.search(r'[A-Za-z]', name):
                     names.append(name)
     return names
@@ -150,14 +160,79 @@ def extract_addresses(text: str) -> list[dict]:
     return unique
 
 
-def extract_accounts(text: str) -> list[dict]:
+def extract_accounts_from_pdf_tables(file_path: str) -> list[dict]:
     """
-    Extracts financial account blocks. Handles both labeled and table-row formats.
+    Parse the ACCOUNT SUMMARY table using pdfplumber cell extraction.
+    More reliable than text extraction when columns are narrow.
     """
     accounts = []
     seen_creditors = set()
 
-    def _add(creditor, account_type_str, account_number, status_str, balance_raw, date_opened_raw):
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            for table in (page.extract_tables() or []):
+                if not table or len(table) < 2:
+                    continue
+                header = [str(c or '').strip().lower() for c in table[0]]
+                if 'creditor' not in header:
+                    continue
+
+                def idx(name):
+                    try:
+                        return header.index(name)
+                    except ValueError:
+                        return -1
+
+                ci = idx('creditor')
+                ti = idx('type')
+                ai = idx('account #')
+                si = idx('status')
+                bi = idx('balance')
+                li = idx('limit')
+                hi = idx('high bal')
+                oi = idx('opened')
+
+                for row in table[1:]:
+                    def cell(i, _row=row):
+                        if i < 0 or i >= len(_row):
+                            return ''
+                        return str(_row[i] or '').strip()
+
+                    creditor = cell(ci)
+                    if not creditor or len(creditor) < 4:
+                        continue
+                    if re.search(r'\b(address|employment|personal|summary|report|date|page|creditor|account|type|status|balance|limit|opened|history)\b', creditor, re.I):
+                        continue
+                    key = re.sub(r'\s+', ' ', creditor.lower())
+                    if key in seen_creditors:
+                        continue
+                    seen_creditors.add(key)
+
+                    def strip_dollar(s):
+                        return re.sub(r'[$,]', '', s or '').strip()
+
+                    accounts.append({
+                        'creditor_name': creditor,
+                        'account_type_raw': cell(ti),
+                        'account_number': cell(ai),
+                        'status_raw': cell(si),
+                        'balance_raw': strip_dollar(cell(bi)),
+                        'credit_limit_raw': strip_dollar(cell(li)),
+                        'high_bal_raw': strip_dollar(cell(hi)),
+                        'date_opened_raw': cell(oi),
+                    })
+    return accounts
+
+
+def extract_accounts(text: str) -> list[dict]:
+    """
+    Extracts financial account blocks. Handles both labeled and table-row formats.
+    Table format: Creditor | Type | Acct# | Status | Balance | Limit | [High Bal] | Opened
+    """
+    accounts = []
+    seen_creditors = set()
+
+    def _add(creditor, account_type_str, account_number, status_str, balance_raw, credit_limit_raw, high_bal_raw, date_opened_raw):
         creditor = creditor.strip()
         if len(creditor) < 4:
             return
@@ -173,23 +248,27 @@ def extract_accounts(text: str) -> list[dict]:
             'account_number': (account_number or '').strip(),
             'status_raw': (status_str or '').strip(),
             'balance_raw': (balance_raw or '').replace(',', ''),
+            'credit_limit_raw': (credit_limit_raw or '').replace(',', ''),
+            'high_bal_raw': (high_bal_raw or '').replace(',', ''),
             'date_opened_raw': (date_opened_raw or '').strip(),
         })
 
-    # Pattern 1 — table row: ALL_CAPS_CREDITOR  MixedCase Type  AccountNum  Status  $Balance  $Limit  MM/YYYY
-    # Account type is 1-3 mixed-case words; balance/limit have $ prefix; limit is skipped.
+    # Pattern 1 — table row: ALL_CAPS_CREDITOR  MixedCase Type  AccountNum  Status  $Balance  $Limit  [$HighBal]  MM/YYYY
+    # Captures 3 optional dollar groups: balance, credit_limit, high_bal (backward-compatible with old 7-col PDFs)
     table_row = re.compile(
         r'^([A-Z][A-Z0-9\s&.,\-/]{3,50}?)(?=\s+[A-Z][a-z]|\s+\*{2}|\s+\d{4})'
         r'\s+([A-Z][a-z]+(?:\s+[A-Za-z]+){0,2})'
         r'\s+(\*{2,}\d+|\d{4,20})'
         r'\s+(Open|Closed|Derogatory|Collection|Charged(?:\s+Off)?)'
         r'(?:\s+\$([\d,]+))?'
-        r'(?:\s+\$[\d,]+)?'
+        r'(?:\s+\$([\d,]+))?'
+        r'(?:\s+\$([\d,]+))?'
         r'(?:\s+(\d{2}/\d{4}))?',
         re.MULTILINE
     )
     for m in table_row.finditer(text):
-        _add(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5) or '', m.group(6) or '')
+        _add(m.group(1), m.group(2), m.group(3), m.group(4),
+             m.group(5) or '', m.group(6) or '', m.group(7) or '', m.group(8) or '')
 
     # Pattern 2 — labeled block: "CREDITOR NAME\nAccount #: NNNN\nBalance: $..."
     labeled_block = re.compile(
@@ -202,9 +281,66 @@ def extract_accounts(text: str) -> list[dict]:
         acct_num = (m.group(2) or '').strip()
         if not acct_num:
             continue
-        _add(m.group(1), '', acct_num, '', m.group(3) or '', '')
+        _add(m.group(1), '', acct_num, '', m.group(3) or '', '', '', '')
 
     return accounts[:50]
+
+
+def extract_account_details(text: str) -> dict:
+    """
+    Parse the ACCOUNT DETAILS section for monthly payment and account address.
+    Returns dict keyed by account_number → {monthly_payment_raw, account_address}.
+    """
+    details = {}
+    section_m = re.search(r'ACCOUNT DETAILS\n(.*?)(?=\n[A-Z][A-Z\s]{3,}\n|\Z)', text, re.DOTALL)
+    if not section_m:
+        return details
+    section = section_m.group(1)
+    line_re = re.compile(
+        r'^(.+?)\s+\((\d{4,20})\)'
+        r'(?:\s+Monthly Pmt:\s+\$([\d,]+))?'
+        r'(?:\s+Addr:\s+([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([A-Z]{2})\s*\|\s*(\d{5}))?',
+        re.MULTILINE
+    )
+    for m in line_re.finditer(section):
+        acct_num = m.group(2).strip()
+        monthly_raw = m.group(3) or ''
+        if m.group(4):
+            address = f"{m.group(4).strip()}, {m.group(5).strip()}, {m.group(6)} {m.group(7)}"
+        else:
+            address = ''
+        details[acct_num] = {
+            'monthly_payment_raw': monthly_raw,
+            'account_address': address,
+        }
+    return details
+
+
+def extract_in_file_since(text: str):
+    """Parse 'In File Since: MM/YYYY' → date or None."""
+    m = re.search(r'In File Since:\s+(\d{2}/\d{4})', text, re.IGNORECASE)
+    if m:
+        parts = m.group(1).split('/')
+        try:
+            return date(int(parts[1]), int(parts[0]), 1)
+        except (ValueError, IndexError):
+            pass
+    return None
+
+
+def extract_credit_score(text: str) -> tuple:
+    """Parse credit score lines. Returns (score_int | None, score_type_str)."""
+    patterns = [
+        (r'FICO Score 8:\s+(\d{3})', 'FICO 8'),
+        (r'FICO Score:\s+(\d{3})', 'FICO'),
+        (r'VantageScore 3\.0:\s+(\d{3})', 'VantageScore 3.0'),
+        (r'VantageScore:\s+(\d{3})', 'VantageScore'),
+    ]
+    for pattern, score_type in patterns:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            return int(m.group(1)), score_type
+    return None, ''
 
 
 # ── Main parse orchestrator ──────────────────────────────────────────────────
@@ -224,6 +360,14 @@ def parse_report(report: CreditReport) -> dict:
 
         bureau = detect_bureau(text)
         ssn, ssn_last_four = extract_ssn(text)
+        credit_score, score_type = extract_credit_score(text)
+
+        accounts = extract_accounts_from_pdf_tables(report.file.path) or extract_accounts(text)
+        account_details = extract_account_details(text)
+        for acct in accounts:
+            detail = account_details.get(acct['account_number'], {})
+            acct['monthly_payment_raw'] = detail.get('monthly_payment_raw', '')
+            acct['account_address'] = detail.get('account_address', '')
 
         extracted = {
             'bureau': bureau,
@@ -232,9 +376,12 @@ def parse_report(report: CreditReport) -> dict:
             'ssn': ssn,
             'ssn_last_four': ssn_last_four,
             'date_of_birth': extract_dob(text),
+            'in_file_since': extract_in_file_since(text),
+            'credit_score': credit_score,
+            'score_type': score_type,
             'alternate_names': extract_alternate_names(text),
             'addresses': extract_addresses(text),
-            'accounts': extract_accounts(text),
+            'accounts': accounts,
         }
 
         report.raw_text = text

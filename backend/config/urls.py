@@ -12,4 +12,5 @@ urlpatterns = [
     path('api/', include('reports.urls')),
     path('api/', include('entities.urls')),
     path('api/', include('identities.urls')),
+    path('api/', include('doctemplates.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

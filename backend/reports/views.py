@@ -135,6 +135,9 @@ def _save_extracted_data(report: CreditReport, extracted: dict):
     subject.ssn = extracted.get('ssn', '')
     subject.ssn_last_four = extracted.get('ssn_last_four', '')
     subject.date_of_birth = extracted.get('date_of_birth')
+    subject.in_file_since = extracted.get('in_file_since')
+    subject.credit_score = extracted.get('credit_score')
+    subject.score_type = extracted.get('score_type', '')
     subject.save()
 
     AlternateName.objects.filter(subject=subject).delete()
@@ -153,19 +156,25 @@ def _save_extracted_data(report: CreditReport, extracted: dict):
 
     FinancialAccount.objects.filter(subject=subject).delete()
     for acct in extracted.get('accounts', []):
-        balance = None
-        raw_balance = acct.get('balance_raw', '').replace(',', '').replace('$', '')
-        if raw_balance:
-            try:
-                balance = float(raw_balance)
-            except ValueError:
-                pass
+        def _parse_decimal(raw_key):
+            raw = acct.get(raw_key, '').replace(',', '').replace('$', '')
+            if raw:
+                try:
+                    return float(raw)
+                except ValueError:
+                    pass
+            return None
+
         FinancialAccount.objects.create(
             subject=subject,
             creditor_name=acct.get('creditor_name', ''),
             account_number=acct.get('account_number', ''),
             account_type=_ACCT_TYPE_MAP.get(acct.get('account_type_raw', '').lower(), 'other'),
             status=_ACCT_STATUS_MAP.get(acct.get('status_raw', '').lower(), 'unknown'),
-            balance=balance,
+            balance=_parse_decimal('balance_raw'),
+            credit_limit=_parse_decimal('credit_limit_raw'),
+            highest_balance=_parse_decimal('high_bal_raw'),
+            monthly_payment=_parse_decimal('monthly_payment_raw'),
+            account_address=acct.get('account_address', ''),
             date_opened=_parse_opened(acct.get('date_opened_raw', '')),
         )

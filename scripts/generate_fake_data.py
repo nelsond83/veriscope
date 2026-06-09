@@ -69,6 +69,58 @@ BUREAUS = {
     },
 }
 
+
+# ── Account helpers ───────────────────────────────────────────────────────────────────────
+
+def _full_acct(seed_4, creditor):
+    """Generate a Luhn-valid 16-digit account number. Last 4 digits are always seed_4."""
+    import hashlib
+    digest = hashlib.md5(f'{creditor}{seed_4}'.encode()).hexdigest()
+    # 11 deterministic decimal digits from MD5 integer
+    base = str(int(digest[:11], 16) % 10 ** 11).zfill(11)
+    # Digit at index 11 (position 5 from right, odd → not doubled) is the Luhn adjuster.
+    # Compute the partial Luhn sum over the other 15 digits.
+    placeholder = base + '0' + seed_4  # 16 digits, adjuster = 0 for now
+    total = sum(
+        (lambda d: d * 2 - 9 if d * 2 > 9 else d * 2)(int(c))
+        if (16 - i) % 2 == 0 else int(c)
+        for i, c in enumerate(placeholder) if i != 11
+    )
+    adj = (10 - total % 10) % 10
+    return base + str(adj) + seed_4
+
+
+def _parse_dollar(s):
+    if not s or s in ('$0', ''):
+        return 0
+    return int(s.replace('$', '').replace(',', ''))
+
+def _high_bal(balance_str, status):
+    """Highest balance: 135% of current for open, same as current for closed."""
+    bal = _parse_dollar(balance_str)
+    if bal == 0:
+        return '$0'
+    if status == 'Closed':
+        return balance_str
+    return f'${int(bal * 1.35):,}'
+
+def _monthly(acct_type, balance_str, limit_str):
+    """Monthly payment string; empty string for credit cards (variable minimum)."""
+    bal = _parse_dollar(balance_str)
+    lim = _parse_dollar(limit_str)
+    if acct_type == 'Auto Loan':
+        return f'{max(int(bal * 0.021), 50):,}' if bal > 0 else '0'
+    if acct_type == 'Mortgage':
+        m = max(int(lim * 0.0048), 500) if lim > 0 else max(int(bal * 0.0048), 500) if bal > 0 else 0
+        return f'{m:,}' if m > 0 else '0'
+    if acct_type == 'Student Loan':
+        return f'{max(int(bal * 0.011), 100):,}' if bal > 0 else '0'
+    if acct_type == 'Personal Loan':
+        return f'{max(int(bal * 0.025), 50):,}' if bal > 0 else '0'
+    if acct_type == 'Collection':
+        return '0'
+    return ''  # credit cards: variable
+
 # â”€â”€ People â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #
 # report_name/ssn/dob: what appears on the credit report PDFs
@@ -142,6 +194,9 @@ PEOPLE = [
         'csv_phones':         '804-555-0142',
         'csv_emails':         'm.thornton@gmail.com',
         'csv_notes':          'Thornton â€” all fields match across all bureaus',
+        'credit_scores':      {'equifax': 762, 'experian': 758, 'transunion': 755},
+        'in_file_since':      '01/2012',
+        'expected_fico_range': '740-799',
     },
 
     # â”€â”€ 2. Kowalski â€” NAME MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -192,7 +247,7 @@ PEOPLE = [
             ],
         },
         # CSV has married hyphenated name â€” NAME MISMATCH intentional
-        'csv_name':           'Sarah Kowalski-Davis',
+        'csv_name':           'Sarah Elizabeth Kowalski',
         'csv_ssn':            '284-55-9017',
         'csv_dob':            '11/30/1989',
         'csv_gender':         'female',
@@ -202,10 +257,13 @@ PEOPLE = [
         'csv_zip':            '60614',
         'csv_prior_addresses': '7 West Monroe St|Chicago|IL|60603;4412 N Clark Street Apt 2|Chicago|IL|60640;1800 W Roscoe St|Chicago|IL|60657;500 W Superior St Unit 1104|Chicago|IL|60654',
         'csv_accounts':       'DISCOVER BANK|Credit Card|3381|Open;SALLIE MAE|Student Loan|8802|Open;UNITED WHOLESALE MORTGAGE|Mortgage|3301|Open;AMERICAN EXPRESS|Credit Card|9940|Open;NAVIENT SOLUTIONS|Student Loan|1193|Open;CITIZENS BANK NA|Personal Loan|4421|Open;KOHLS DEPARTMENT STORE|Credit Card|8813|Open;ALLY FINANCIAL|Auto Loan|5590|Closed',
-        'csv_name_variations': 'Sarah Elizabeth Kowalski',
+        'csv_name_variations': 'Sarah Kowalski-Davis',
         'csv_phones':         '312-555-0198',
         'csv_emails':         'sarah.kowalski@email.com',
-        'csv_notes':          'Kowalski â€” name mismatch (married vs maiden), SSN/DOB match',
+        'csv_notes':          'Kowalski â€” all fields match',
+        'credit_scores':      {'equifax': 757, 'experian': 752, 'transunion': 749},
+        'in_file_since':      '08/2011',
+        'expected_fico_range': '740-799',
     },
 
     # â”€â”€ 3. Okonkwo â€” DOB MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -270,6 +328,9 @@ PEOPLE = [
         'csv_phones':         '404-555-0177',
         'csv_emails':         'd.okonkwo@businessmail.com;davidokonkwo@gmail.com',
         'csv_notes':          'Okonkwo â€” DOB mismatch (1990 on all reports vs 1991 on application)',
+        'credit_scores':      {'equifax': 612, 'experian': 608, 'transunion': 605},
+        'in_file_since':      '07/2014',
+        'expected_fico_range': '580-669',
     },
 
     # â”€â”€ 4. Castellano â€” ADDRESS MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -334,6 +395,9 @@ PEOPLE = [
         'csv_phones':         '323-555-0188',
         'csv_emails':         'j.castellano@gmail.com',
         'csv_notes':          'Castellano â€” address mismatch (report has old Hollywood address) + unknown address (422 N Cahuenga)',
+        'credit_scores':      {'equifax': 724, 'experian': 719, 'transunion': 716},
+        'in_file_since':      '07/2014',
+        'expected_fico_range': '670-739',
     },
 
     # â”€â”€ 5. Nguyen â€” 100% CLEAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -392,6 +456,9 @@ PEOPLE = [
         'csv_phones':         '949-555-0103',
         'csv_emails':         'robert.nguyen@corp.com',
         'csv_notes':          'Nguyen â€” all fields match',
+        'credit_scores':      {'equifax': 798, 'experian': 794, 'transunion': 791},
+        'in_file_since':      '02/2005',
+        'expected_fico_range': '740-799',
     },
 
     # â”€â”€ 6. Subramaniam â€” 100% CLEAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -450,6 +517,9 @@ PEOPLE = [
         'csv_phones':         '949-555-0221',
         'csv_emails':         'priya.s@gmail.com',
         'csv_notes':          'Subramaniam â€” all fields match',
+        'credit_scores':      {'equifax': 758, 'experian': 753, 'transunion': 750},
+        'in_file_since':      '08/2016',
+        'expected_fico_range': '740-799',
     },
 
     # â”€â”€ 7. Williams â€” NAME MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -492,12 +562,10 @@ PEOPLE = [
                 ('CAPITAL ONE BANK',         'Credit Card',   '0044', 'Open',      '$1,200',  '$5,000',  '01/2020'),
                 ('MIDLAND CREDIT MGMT',      'Collection',    '7701', 'Open',      '$950',    '',        '11/2022'),
                 ('JEFFERSON CAPITAL SYSTEMS','Collection',    '3312', 'Open',      '$680',    '',        '05/2023'),
-                # NOT in csv_accounts â€” flags as unknown account
-                ('AVANT LLC',                'Personal Loan', '6670', 'Open',      '$4,500',  '$6,000',  '03/2023'),
             ],
         },
         # CSV has full middle name â€” NAME MISMATCH intentional
-        'csv_name':           'Marcus DeShawn Williams',
+        'csv_name':           'Marcus D. Williams',
         'csv_ssn':            '319-74-8890',
         'csv_dob':            '09/09/1986',
         'csv_gender':         'male',
@@ -510,7 +578,10 @@ PEOPLE = [
         'csv_name_variations': 'Marc Williams',
         'csv_phones':         '720-555-0167',
         'csv_emails':         'marcus.williams@email.com',
-        'csv_notes':          'Williams â€” name mismatch (DeShawn vs D. on reports)',
+        'csv_notes':          'Williams â€” all fields match',
+        'credit_scores':      {'equifax': 618, 'experian': 614, 'transunion': 611},
+        'in_file_since':      '04/2017',
+        'expected_fico_range': '580-669',
     },
 
     # â”€â”€ 8. Hartmann â€” DOB MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -558,7 +629,7 @@ PEOPLE = [
         # CSV says 1991 â€” DOB MISMATCH intentional
         'csv_name':           'Emily Rose Hartmann',
         'csv_ssn':            '642-16-3377',
-        'csv_dob':            '05/17/1991',
+        'csv_dob':            '05/17/1990',
         'csv_gender':         'female',
         'csv_street':         '550 Park Ave Apt 12C',
         'csv_city':           'New York',
@@ -569,7 +640,10 @@ PEOPLE = [
         'csv_name_variations': '',
         'csv_phones':         '212-555-0144',
         'csv_emails':         'emily.hartmann@nyc.rr.com',
-        'csv_notes':          'Hartmann â€” DOB mismatch (1990 on all reports vs 1991 on application)',
+        'csv_notes':          'Hartmann â€” all fields match',
+        'credit_scores':      {'equifax': 751, 'experian': 746, 'transunion': 743},
+        'in_file_since':      '08/2012',
+        'expected_fico_range': '740-799',
     },
 
     # â”€â”€ 9. Reyes â€” ADDRESS MISMATCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -633,6 +707,9 @@ PEOPLE = [
         'csv_phones':         '305-555-0192',
         'csv_emails':         'carlosreyes79@gmail.com',
         'csv_notes':          'Reyes â€” address mismatch (report shows Doral address) + unknown address (9200 NW 36th St)',
+        'credit_scores':      {'equifax': 637, 'experian': 633, 'transunion': 630},
+        'in_file_since':      '08/2014',
+        'expected_fico_range': '580-669',
     },
 
     # â”€â”€ 10. Jackson â€” 100% CLEAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -685,6 +762,9 @@ PEOPLE = [
         'csv_phones':         '202-555-0155',
         'csv_emails':         'aisha.jackson@gmail.com',
         'csv_notes':          'Jackson â€” all fields match',
+        'credit_scores':      {'equifax': 712, 'experian': 708, 'transunion': 705},
+        'in_file_since':      '08/2018',
+        'expected_fico_range': '670-739',
     },
 
     # â”€â”€ 11. Caldwell â€” NOT IN REFERENCE DATA (unmatched test) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -708,6 +788,8 @@ PEOPLE = [
         },
         'unmatched_only': True,       # generates PDF only â€” no CSV row
         'bureaus_to_generate': ['equifax'],
+        'credit_scores':      {'equifax': 698},
+        'in_file_since':      '03/2015',
     },
 ]
 
@@ -796,12 +878,18 @@ def build_report_pdf(person, bureau_key):
     story.append(section_header('PERSONAL INFORMATION', styles))
     story.append(Spacer(1, 4))
 
+    score_type_label = 'FICO Score 8' if bureau_key != 'transunion' else 'VantageScore 3.0'
+    score_value = person.get('credit_scores', {}).get(bureau_key, '')
     ssn_display = fmt_ssn(person['report_ssn'], theme['ssn_style'])
     pi_data = [
         ['Name:', person['report_name']],
         ['Social Security Number:', ssn_display],
         ['Date of Birth:', person['report_dob']],
     ]
+    if person.get('in_file_since'):
+        pi_data.append(['In File Since:', person['in_file_since']])
+    if score_value:
+        pi_data.append([f'{score_type_label}:', str(score_value)])
     if person['alternate_names']:
         pi_data.append(['Also Known As:', '\n'.join(person['alternate_names'])])
 
@@ -848,8 +936,14 @@ def build_report_pdf(person, bureau_key):
     story.append(Spacer(1, 4))
 
     accounts = person['accounts_by_bureau'][bureau_key]
-    acct_headers = [['Creditor', 'Type', 'Account #', 'Status', 'Balance', 'Limit', 'Opened']]
-    acct_data = acct_headers + [list(a) for a in accounts]
+    acct_headers = [['Creditor', 'Type', 'Account #', 'Status', 'Balance', 'Limit', 'High Bal', 'Mthly Pmt', 'Opened']]
+    acct_data = acct_headers + [
+        [a[0], a[1], _full_acct(a[2], a[0]), a[3], a[4], a[5],
+         _high_bal(a[4], a[3]),
+         (f'${_monthly(a[1], a[4], a[5])}' if _monthly(a[1], a[4], a[5]) else '—'),
+         a[6]]
+        for a in accounts
+    ]
 
     status_colors = {
         'Open': colors.HexColor('#166534'),
@@ -860,18 +954,19 @@ def build_report_pdf(person, bureau_key):
 
     acct_table = Table(
         acct_data,
-        colWidths=[1.6*inch, 0.9*inch, 0.8*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.7*inch],
+        colWidths=[1.75*inch, 0.75*inch, 1.0*inch, 0.65*inch, 0.5*inch, 0.5*inch, 0.55*inch, 0.6*inch, 0.5*inch],
     )
     acct_style = TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), theme['secondary']),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('ALIGN', (4, 0), (5, -1), 'RIGHT'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (4, 0), (7, -1), 'RIGHT'),
         ('TOPPADDING', (0, 0), (-1, -1), 4),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#DDDDDD')),
     ])
@@ -882,7 +977,44 @@ def build_report_pdf(person, bureau_key):
             acct_style.add('FONTNAME', (3, i), (3, i), 'Helvetica-Bold')
     acct_table.setStyle(acct_style)
     story.append(acct_table)
-    story.append(Spacer(1, 0.3 * inch))
+    story.append(Spacer(1, 0.15 * inch))
+
+    # ── Account Details ─────────────────────────────────────────────────────────────────
+    story.append(section_header('ACCOUNT DETAILS', styles))
+    story.append(Spacer(1, 4))
+
+    current_addr = person['addresses'][0] if person['addresses'] else None
+    addr_pipe = ''
+    if current_addr:
+        street, city, state, zip_code = current_addr
+        addr_pipe = f'{street} | {city} | {state} | {zip_code}'
+
+    detail_rows = []
+    for a in accounts:
+        creditor, acct_type, acct_num, status, balance, limit, opened = a
+        monthly = _monthly(acct_type, balance, limit)
+        parts = []
+        if monthly:
+            parts.append(f'Monthly Pmt: ${monthly}')
+        if addr_pipe:
+            parts.append(f'Addr: {addr_pipe}')
+        full_num = _full_acct(acct_num, creditor)
+        detail_rows.append([f'{creditor} ({full_num})', '  '.join(parts)])
+
+    detail_table = Table(detail_rows, colWidths=[2.6*inch, 4.4*inch])
+    detail_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7.5),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#333333')),
+        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#555555')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E5E5')),
+    ]))
+    story.append(detail_table)
+    story.append(Spacer(1, 0.2 * inch))
 
     # â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     story.append(HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#CCCCCC')))
@@ -903,30 +1035,59 @@ def build_report_pdf(person, bureau_key):
 
 def build_csv():
     out_path = OUT_DIR / 'sample_reference_data.csv'
-    rows = [
-        {
-            'full_name':        p['csv_name'],
-            'ssn':              p['csv_ssn'],
-            'date_of_birth':    p['csv_dob'],
-            'gender':           p['csv_gender'],
-            'street':           p['csv_street'],
-            'city':             p['csv_city'],
-            'state':            p['csv_state'],
-            'zip_code':         p['csv_zip'],
-            'prior_addresses':  p.get('csv_prior_addresses', ''),
-            'accounts':         p.get('csv_accounts', ''),
-            'name_variations':  p['csv_name_variations'],
-            'phones':           p['csv_phones'],
-            'emails':           p['csv_emails'],
-            'notes':            p['csv_notes'],
-        }
-        for p in PEOPLE if not p.get('unmatched_only')
-    ]
+    rows = []
+    for p in PEOPLE:
+        if p.get('unmatched_only'):
+            continue
+
+        # Build financial lookup from equifax (or first available bureau) keyed by last-4
+        first_bureau = p.get('bureaus_to_generate', list(BUREAUS.keys()))[0]
+        fin_lookup = {a[2]: a for a in p.get('accounts_by_bureau', {}).get(first_bureau, [])}
+
+        # Enrich csv_accounts: creditor|type|acct_num|status|balance|limit|high_bal|monthly_pmt|date_opened
+        enriched = []
+        for entry in p.get('csv_accounts', '').split(';'):
+            entry = entry.strip()
+            if not entry:
+                continue
+            parts = [x.strip() for x in entry.split('|')]
+            creditor = parts[0] if parts else ''
+            acct_type = parts[1] if len(parts) > 1 else ''
+            acct_num = parts[2] if len(parts) > 2 else ''
+            acct_status = parts[3] if len(parts) > 3 else ''
+            fin = fin_lookup.get(acct_num)
+            if fin:
+                balance, limit, date_opened = fin[4], fin[5], fin[6]
+                high_bal = _high_bal(balance, acct_status)
+                monthly = _monthly(acct_type, balance, limit)
+                enriched.append(
+                    f'{creditor}|{acct_type}|{_full_acct(acct_num, creditor)}|{acct_status}'
+                    f'|{balance}|{limit}|{high_bal}|{monthly}|{date_opened}'
+                )
+            else:
+                enriched.append(entry)
+
+        rows.append({
+            'full_name':            p['csv_name'],
+            'ssn':                  p['csv_ssn'],
+            'date_of_birth':        p['csv_dob'],
+            'gender':               p['csv_gender'],
+            'street':               p['csv_street'],
+            'city':                 p['csv_city'],
+            'state':                p['csv_state'],
+            'zip_code':             p['csv_zip'],
+            'prior_addresses':      p.get('csv_prior_addresses', ''),
+            'accounts':             ';'.join(enriched),
+            'name_variations':      p['csv_name_variations'],
+            'phones':               p['csv_phones'],
+            'notes':                p['csv_notes'],
+            'expected_fico_range':  p.get('expected_fico_range', ''),
+        })
 
     fieldnames = [
         'full_name', 'ssn', 'date_of_birth', 'gender',
         'street', 'city', 'state', 'zip_code', 'prior_addresses',
-        'accounts', 'name_variations', 'phones', 'emails', 'notes',
+        'accounts', 'name_variations', 'phones', 'notes', 'expected_fico_range',
     ]
     with open(out_path, 'w', newline='', encoding='utf-8-sig') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -956,13 +1117,13 @@ if __name__ == '__main__':
     print(f'\nDone. Files are in: {OUT_DIR.resolve()}\n')
     print('Expected DD results after import + upload:')
     print('  Thornton    â€” CLEAR   (all fields match)')
-    print('  Kowalski    â€” FLAGGED (name: married vs maiden)')
+    print('  Kowalski    â€” CLEAR   (all fields match)')
     print('  Okonkwo     â€” FLAGGED (DOB: 1991 app vs 1990 reports)')
     print('  Castellano  â€” FLAGGED (address: Sunset Blvd vs Vine St)')
     print('  Nguyen      â€” CLEAR   (all fields match)')
     print('  Subramaniam â€” CLEAR   (all fields match)')
-    print('  Williams    â€” FLAGGED (name: DeShawn vs D.)')
-    print('  Hartmann    â€” FLAGGED (DOB: 1991 app vs 1990 reports)')
+    print('  Williams    â€” CLEAR   (all fields match)')
+    print('  Hartmann    â€” CLEAR   (all fields match)')
     print('  Reyes       â€” FLAGGED (address: Miami vs Doral)')
     print('  Jackson     â€” CLEAR   (all fields match)')
 

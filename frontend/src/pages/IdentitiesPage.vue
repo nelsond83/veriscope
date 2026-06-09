@@ -113,22 +113,6 @@
               @click="form.phones.splice(i,1)" />
           </div>
 
-          <!-- Emails -->
-          <div class="row items-center q-mb-xs q-mt-sm">
-            <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Email Addresses</span>
-            <q-space />
-            <q-btn flat dense size="sm" icon="add" color="primary"
-              @click="form.emails.push({ address:'', email_type:'personal' })" />
-          </div>
-          <div v-for="(e, i) in form.emails" :key="i"
-            class="row q-gutter-xs q-mb-xs items-center">
-            <q-input v-model="e.address" label="Email" dark filled dense class="col" />
-            <q-select v-model="e.email_type" :options="emailTypeOptions"
-              emit-value map-options dark filled dense style="max-width:100px" />
-            <q-btn flat round dense icon="close" size="xs" color="grey-6"
-              @click="form.emails.splice(i,1)" />
-          </div>
-
           <!-- Addresses -->
           <div class="row items-center q-mb-xs q-mt-sm">
             <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Addresses</span>
@@ -167,7 +151,7 @@
         <q-card-section>
           <div class="text-h6 text-white">Import Identities from CSV</div>
           <div class="text-caption text-grey-6 q-mt-xs">
-            Columns: full_name, ssn, date_of_birth, gender, street, city, state, zip_code, name_variations, phones, emails, notes
+            Columns: full_name, ssn, date_of_birth, gender, street, city, state, zip_code, name_variations, phones, notes
           </div>
         </q-card-section>
         <q-card-section class="q-pt-none">
@@ -221,23 +205,18 @@ const phoneTypeOptions = [
   { label: 'Work', value: 'work' },
   { label: 'Other', value: 'other' },
 ]
-const emailTypeOptions = [
-  { label: 'Personal', value: 'personal' },
-  { label: 'Work', value: 'work' },
-  { label: 'Other', value: 'other' },
-]
 function blankAddress() { return { street: '', city: '', state: '', zip_code: '', address_type: 'current' } }
 function addAddress(f) { f.addresses.push({ ...blankAddress(), address_type: 'previous' }) }
 function removeAddress(f, i) { f.addresses.splice(i, 1) }
 
 const form = ref({
   full_name: '', ssn: '', date_of_birth: '', gender: '',
-  notes: '', addresses: [blankAddress()], name_variations: [], phones: [], emails: [],
+  notes: '', addresses: [blankAddress()], name_variations: [], phones: [],
 })
 
 const columns = [
   { name: 'full_name', label: 'Name', field: 'full_name', align: 'left', sortable: true },
-  { name: 'ssn', label: 'SSN', field: row => row.ssn ? `***-**-${row.ssn.slice(-4)}` : '—', align: 'left' },
+  { name: 'ssn', label: 'SSN', field: 'ssn', align: 'left' },
   { name: 'date_of_birth', label: 'Date of Birth', field: 'date_of_birth', align: 'left', sortable: true },
   { name: 'bureaus', label: 'Bureaus', field: 'bureaus', align: 'center' },
   { name: 'dd_status', label: 'DD Status', field: 'dd_status', align: 'center', sortable: true },
@@ -275,7 +254,7 @@ async function createIdentity() {
     }
     await api.post('/identities/', payload)
     showCreate.value = false
-    form.value = { full_name: '', ssn: '', date_of_birth: '', gender: '', notes: '', addresses: [blankAddress()], name_variations: [], phones: [], emails: [] }
+    form.value = { full_name: '', ssn: '', date_of_birth: '', gender: '', notes: '', addresses: [blankAddress()], name_variations: [], phones: [] }
     $q.notify({ type: 'positive', message: 'Identity added.' })
     await load()
   } catch {

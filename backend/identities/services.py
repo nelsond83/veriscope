@@ -243,6 +243,26 @@ def run_comparison(identity: Identity, report) -> list:
                 match_status='mismatch',
             ))
 
+    # Credit score vs expected FICO range
+    if identity.expected_fico_range and getattr(subject, 'credit_score', None):
+        range_parts = identity.expected_fico_range.split('-')
+        if len(range_parts) == 2:
+            try:
+                low, high = int(range_parts[0]), int(range_parts[1])
+                score = subject.credit_score
+                score_label = str(score)
+                if getattr(subject, 'score_type', ''):
+                    score_label = f'{score} ({subject.score_type})'
+                results.append(ComparisonResult(
+                    identity=identity, report=report,
+                    field_name='credit_score',
+                    identity_value=identity.expected_fico_range,
+                    report_value=score_label,
+                    match_status='match' if low <= score <= high else 'mismatch',
+                ))
+            except (ValueError, AttributeError):
+                pass
+
     ComparisonResult.objects.filter(identity=identity, report=report).delete()
     ComparisonResult.objects.bulk_create(results)
     return results

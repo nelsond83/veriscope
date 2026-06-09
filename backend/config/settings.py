@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     'reports',
     'entities',
     'identities',
+    'doctemplates',
 ]
 
 MIDDLEWARE = [
