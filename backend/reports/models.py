@@ -30,6 +30,7 @@ class CreditReport(models.Model):
         ('parsing', 'Parsing'),
         ('parsed', 'Parsed'),
         ('failed', 'Failed'),
+        ('archived', 'Archived'),
     ]
     CONFIDENCE_CHOICES = [
         ('ssn', 'SSN Match'),

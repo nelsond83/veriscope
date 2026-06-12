@@ -16,8 +16,6 @@ const routes = [
       { path: 'upload', component: () => import('pages/UploadPage.vue'), name: 'upload' },
       { path: 'reports/:id', component: () => import('pages/ReportDetailPage.vue'), name: 'report-detail' },
       { path: 'unmatched', component: () => import('pages/UnmatchedPage.vue'), name: 'unmatched' },
-      { path: 'templates', component: () => import('pages/TemplatesPage.vue'), name: 'templates' },
-      { path: 'templates/:id', component: () => import('pages/TemplateBuilderPage.vue'), name: 'template-builder' },
     ],
   },
   { path: '/:catchAll(.*)*', component: () => import('pages/ErrorNotFound.vue') },

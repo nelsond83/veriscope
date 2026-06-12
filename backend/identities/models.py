@@ -1,3 +1,4 @@
+import random
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
@@ -12,6 +13,7 @@ class Identity(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    entity_id = models.CharField(max_length=5, unique=True, blank=True, db_index=True)
     full_name = models.CharField(max_length=255)
     ssn = models.CharField(max_length=11, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -35,6 +37,17 @@ class Identity(models.Model):
 
     def __str__(self):
         return self.full_name
+
+    def save(self, *args, **kwargs):
+        if not self.entity_id:
+            for _ in range(100):
+                eid = str(random.randint(10000, 99999))
+                if not Identity.objects.filter(entity_id=eid).exists():
+                    self.entity_id = eid
+                    break
+            else:
+                self.entity_id = str(random.randint(10000, 99999))
+        super().save(*args, **kwargs)
 
     @property
     def dd_status(self):
@@ -127,6 +140,32 @@ class IdentityAccount(models.Model):
 
     def __str__(self):
         return f'{self.creditor_name} {self.account_number}'
+
+
+class DDRun(models.Model):
+    """Archived snapshot of a completed DD — preserved when the user clears active results."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey(Identity, on_delete=models.CASCADE, related_name='dd_runs')
+    created_at = models.DateTimeField(auto_now_add=True)
+    results_snapshot = models.JSONField(default=list)
+    reports = models.ManyToManyField('reports.CreditReport', blank=True, related_name='dd_runs')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'DD Run {self.created_at:%Y-%m-%d} — {self.identity}'
+
+    @property
+    def dd_status(self):
+        statuses = {r['match_status'] for r in self.results_snapshot}
+        if 'mismatch' in statuses:
+            return 'flagged'
+        if 'partial' in statuses:
+            return 'review'
+        if statuses:
+            return 'clear'
+        return 'pending'
 
 
 class ComparisonResult(models.Model):

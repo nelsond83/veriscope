@@ -12,6 +12,8 @@
         :label="`Filter: ${activeFilter}`"
         class="q-mr-sm"
         @remove="router.push({ name: 'identities' })" />
+      <q-btn flat unelevated icon="download" label="Export All" class="q-mr-sm" @click="exportAll" />
+      <q-btn flat unelevated icon="restart_alt" label="Clear All DD" color="warning" class="q-mr-sm" @click="confirmClearAll = true" />
       <q-btn flat unelevated icon="upload" label="Import CSV" class="q-mr-sm" @click="showImport = true" />
       <q-btn unelevated color="primary" icon="person_add" label="Add Identity" @click="showCreate = true" />
     </div>
@@ -136,11 +138,69 @@
             </div>
           </div>
 
+          <!-- Expected FICO Range -->
+          <q-select v-model="form.expected_fico_range" label="Expected FICO / Advantage Score Range (optional)"
+            dark filled clearable :options="FICO_RANGES" emit-value map-options class="q-mt-sm"
+            hint="Used to compare credit score on bureau reports" />
+
+          <!-- Reference Accounts -->
+          <div class="row items-center q-mb-xs q-mt-md">
+            <span class="text-caption text-grey-5 text-uppercase" style="letter-spacing:.5px">Reference Accounts</span>
+            <q-space />
+            <q-btn flat dense size="sm" icon="add" color="primary" @click="form.ref_accounts.push(blankAccount())" />
+          </div>
+          <div v-for="(acct, i) in form.ref_accounts" :key="i"
+            class="q-mb-sm q-pa-sm" style="border:1px solid rgba(245,245,247,0.08); border-radius:8px">
+            <div class="row items-center q-mb-xs">
+              <span class="text-caption text-grey-6">Account {{ i + 1 }}</span>
+              <q-space />
+              <q-btn flat round dense icon="close" size="xs" color="grey-6" @click="form.ref_accounts.splice(i,1)" />
+            </div>
+            <div class="row q-gutter-xs q-mb-xs">
+              <q-input v-model="acct.creditor_name" label="Creditor" dark filled dense class="col" />
+              <q-input v-model="acct.account_type" label="Type" dark filled dense style="max-width:110px" />
+            </div>
+            <div class="row q-gutter-xs q-mb-xs">
+              <q-input v-model="acct.account_number" label="Account #" dark filled dense class="col" />
+              <q-input v-model="acct.status" label="Status" dark filled dense style="max-width:110px" />
+            </div>
+            <div class="row q-gutter-xs q-mb-xs">
+              <q-input v-model="acct.balance" label="Balance" dark filled dense class="col" prefix="$" type="number" />
+              <q-input v-model="acct.credit_limit" label="Limit" dark filled dense class="col" prefix="$" type="number" />
+              <q-input v-model="acct.monthly_payment" label="Mthly Pmt" dark filled dense class="col" prefix="$" type="number" />
+            </div>
+            <div class="row q-gutter-xs">
+              <q-input v-model="acct.highest_balance" label="High Bal" dark filled dense class="col" prefix="$" type="number" />
+              <q-input v-model="acct.date_opened" label="Opened" dark filled dense class="col" hint="MM/YYYY" />
+            </div>
+          </div>
+
           <q-input v-model="form.notes" label="Notes" dark filled type="textarea" autogrow class="q-mt-sm" />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
           <q-btn flat label="Cancel" v-close-popup />
           <q-btn unelevated color="primary" label="Add" :loading="creating" @click="createIdentity" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Clear All DD confirmation -->
+    <q-dialog v-model="confirmClearAll" persistent>
+      <q-card class="vs-card" style="min-width:360px">
+        <q-card-section>
+          <div class="text-h6 text-white">Clear All DD Results?</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p style="color:#EBEBED">
+            This will archive the current DD results for all identities and detach their reports.
+            All history will be preserved and viewable on each identity. New PDFs will be required
+            to run a new DD.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md" style="gap:8px">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn unelevated color="warning" label="Clear All" icon="restart_alt"
+            :loading="clearingAll" @click="clearAllDD" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -185,9 +245,18 @@ const filteredIdentities = computed(() =>
 )
 const showCreate = ref(false)
 const showImport = ref(false)
+const confirmClearAll = ref(false)
 const creating = ref(false)
 const importing = ref(false)
+const clearingAll = ref(false)
 const importFile = ref(null)
+const FICO_RANGES = [
+  { label: '800-850 (Exceptional)', value: '800-850' },
+  { label: '740-799 (Very Good)', value: '740-799' },
+  { label: '670-739 (Good)', value: '670-739' },
+  { label: '580-669 (Fair)', value: '580-669' },
+  { label: '300-579 (Poor)', value: '300-579' },
+]
 const genderOptions = [
   { label: 'Male', value: 'male' },
   { label: 'Female', value: 'female' },
@@ -208,11 +277,16 @@ const phoneTypeOptions = [
 function blankAddress() { return { street: '', city: '', state: '', zip_code: '', address_type: 'current' } }
 function addAddress(f) { f.addresses.push({ ...blankAddress(), address_type: 'previous' }) }
 function removeAddress(f, i) { f.addresses.splice(i, 1) }
+function blankAccount() {
+  return { creditor_name: '', account_type: '', account_number: '', status: '',
+           balance: null, credit_limit: null, highest_balance: null, monthly_payment: null, date_opened: '' }
+}
+function blankForm() {
+  return { full_name: '', ssn: '', date_of_birth: '', gender: '', expected_fico_range: '',
+           notes: '', addresses: [blankAddress()], name_variations: [], phones: [], ref_accounts: [] }
+}
 
-const form = ref({
-  full_name: '', ssn: '', date_of_birth: '', gender: '',
-  notes: '', addresses: [blankAddress()], name_variations: [], phones: [],
-})
+const form = ref(blankForm())
 
 const columns = [
   { name: 'full_name', label: 'Name', field: 'full_name', align: 'left', sortable: true },
@@ -254,13 +328,41 @@ async function createIdentity() {
     }
     await api.post('/identities/', payload)
     showCreate.value = false
-    form.value = { full_name: '', ssn: '', date_of_birth: '', gender: '', notes: '', addresses: [blankAddress()], name_variations: [], phones: [] }
+    form.value = blankForm()
     $q.notify({ type: 'positive', message: 'Identity added.' })
     await load()
   } catch {
     $q.notify({ type: 'negative', message: 'Failed to add identity.' })
   } finally {
     creating.value = false
+  }
+}
+
+async function clearAllDD() {
+  clearingAll.value = true
+  try {
+    const res = await api.post('/identities/clear-all-dd/')
+    confirmClearAll.value = false
+    $q.notify({ type: 'positive', message: res.data.detail })
+    await load()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Failed to clear DD.' })
+  } finally {
+    clearingAll.value = false
+  }
+}
+
+async function exportAll() {
+  try {
+    const res = await api.get('/identities/export-dd/', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'dd_export.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Export failed.' })
   }
 }
 

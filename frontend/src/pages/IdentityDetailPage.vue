@@ -158,7 +158,14 @@
     </q-card>
 
     <!-- DD Report Card — one card per bureau -->
-    <div class="text-subtitle1 text-weight-medium text-white q-mb-md">DD Report Card</div>
+    <div class="row items-center q-mb-md">
+      <div class="text-subtitle1 text-weight-medium text-white">DD Report Card</div>
+      <q-space />
+      <q-btn flat dense icon="download" label="Export" size="sm" class="q-mr-sm" @click="exportDD" />
+      <q-btn flat dense icon="restart_alt" label="Clear DD" size="sm" color="warning"
+        :disable="!identity?.comparisons?.length && !identity?.reports?.length"
+        @click="showClearDD = true" />
+    </div>
     <div class="row q-col-gutter-md q-mb-xl">
       <div v-for="b in BUREAUS" :key="b" class="col-xs-12 col-md-4">
         <q-card class="vs-card column full-height">
@@ -489,6 +496,78 @@
       </q-card>
     </template>
 
+    <!-- DD History -->
+    <template v-if="identity?.dd_runs?.length">
+      <div class="row items-center q-mb-md q-mt-xl">
+        <div class="text-subtitle1 text-weight-medium text-grey-5">DD History</div>
+        <q-badge :label="identity.dd_runs.length" color="grey-7" class="q-ml-sm" />
+      </div>
+      <div class="q-mb-xl">
+        <q-card v-for="run in identity.dd_runs" :key="run.id" class="vs-card q-mb-md">
+          <q-card-section>
+            <div class="row items-center q-mb-sm" style="gap:10px">
+              <q-icon name="history" size="16px" color="grey-6" />
+              <span class="text-weight-medium text-grey-3" style="font-size:0.9rem">
+                {{ fmtFullDate(run.created_at) }}
+              </span>
+              <q-badge :color="ddColor(run.dd_status)" :label="ddLabel(run.dd_status)"
+                style="font-size:0.65rem; padding:3px 8px" />
+              <q-space />
+              <div class="row items-center" style="gap:6px">
+                <q-badge v-for="r in run.reports" :key="r.id" dense color="dark"
+                  style="font-size:0.6rem; cursor:pointer"
+                  :label="r.bureau.slice(0,2).toUpperCase()"
+                  @click="openArchivedPdf(r)" />
+              </div>
+            </div>
+            <div v-if="run.results_snapshot?.length">
+              <div v-for="result in run.results_snapshot.filter(r => r.match_status !== 'match')" :key="result.id"
+                class="row items-center q-mb-xs" style="gap:6px">
+                <q-icon
+                  :name="result.match_status === 'mismatch' ? 'cancel' : result.match_status === 'partial' ? 'warning' : 'info'"
+                  :color="result.match_status === 'mismatch' ? 'negative' : result.match_status === 'partial' ? 'warning' : 'grey'"
+                  size="13px" />
+                <span style="font-size:0.75rem; color:#AAAAAE; text-transform:capitalize">
+                  {{ result.field_name.replace(/_/g, ' ') }}
+                </span>
+                <span v-if="result.report_value" style="font-size:0.75rem; color:#C4C4C8">
+                  {{ result.report_value }}
+                </span>
+                <q-badge dense color="dark" style="font-size:0.55rem"
+                  :label="bureauAbbr(result.report)" />
+              </div>
+              <div v-if="run.results_snapshot.every(r => r.match_status === 'match')"
+                class="row items-center" style="gap:5px">
+                <q-icon name="check_circle" color="positive" size="13px" />
+                <span style="font-size:0.75rem; color:#34C759">All fields matched</span>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
+      </div>
+    </template>
+
+    <!-- Clear DD confirmation dialog -->
+    <q-dialog v-model="showClearDD" persistent>
+      <q-card class="vs-card" style="min-width:360px">
+        <q-card-section>
+          <div class="text-h6 text-white">Clear DD Results?</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p style="color:#EBEBED">
+            The current DD results and linked reports for
+            <strong>{{ identity?.full_name }}</strong> will be archived and a new DD
+            will require fresh PDFs to be uploaded.
+          </p>
+        </q-card-section>
+        <q-card-actions align="right" class="q-pa-md" style="gap:8px">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn unelevated color="warning" label="Clear DD" icon="restart_alt"
+            :loading="clearingDD" @click="clearDD" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Edit dialog -->
     <q-dialog v-model="showEdit" persistent>
       <q-card class="vs-card" style="min-width:480px; max-width:600px; max-height:90vh; overflow-y:auto">
@@ -651,8 +730,10 @@ const unmatched = ref([])
 const assigning = ref(null)
 const showEdit = ref(false)
 const showDelete = ref(false)
+const showClearDD = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
+const clearingDD = ref(false)
 const editForm = ref({})
 
 const BUREAUS = ['equifax', 'experian', 'transunion']
@@ -982,6 +1063,43 @@ async function deleteIdentity() {
   } finally {
     deleting.value = false
   }
+}
+
+async function clearDD() {
+  clearingDD.value = true
+  try {
+    await api.post(`/identities/${route.params.id}/clear-dd/`)
+    showClearDD.value = false
+    $q.notify({ type: 'positive', message: 'DD archived and cleared.' })
+    await load()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e?.response?.data?.detail || 'Failed to clear DD.' })
+  } finally {
+    clearingDD.value = false
+  }
+}
+
+async function exportDD() {
+  try {
+    const res = await api.get(`/identities/${route.params.id}/export-dd/`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dd_${identity.value?.full_name?.replace(/\s+/g, '_') || 'export'}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Export failed.' })
+  }
+}
+
+function bureauAbbr(reportId) {
+  const r = reports.value.find(r => r.id === reportId)
+  return r ? { equifax: 'EQ', experian: 'EX', transunion: 'TU' }[r.bureau] || r.bureau.slice(0, 2).toUpperCase() : '??'
+}
+
+function openArchivedPdf(archivedReport) {
+  if (archivedReport.file_url) window.open(archivedReport.file_url, '_blank')
 }
 
 onMounted(load)

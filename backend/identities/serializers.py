@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import datetime
 from rest_framework import serializers
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun
 
 
 class ComparisonResultSerializer(serializers.ModelSerializer):
@@ -39,7 +39,6 @@ class IdentityPhoneSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-
 class IdentityAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = IdentityAccount
@@ -49,6 +48,33 @@ class IdentityAccountSerializer(serializers.ModelSerializer):
             'date_opened', 'account_address', 'order',
         ]
         read_only_fields = ['id']
+
+
+class DDRunReportSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    bureau = serializers.CharField()
+    original_filename = serializers.CharField()
+    file_url = serializers.SerializerMethodField()
+    uploaded_at = serializers.DateTimeField()
+
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return obj.file.url if obj.file else None
+
+
+class DDRunSerializer(serializers.ModelSerializer):
+    dd_status = serializers.ReadOnlyField()
+    reports = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DDRun
+        fields = ['id', 'created_at', 'dd_status', 'results_snapshot', 'reports']
+        read_only_fields = ['id', 'created_at']
+
+    def get_reports(self, obj):
+        return DDRunReportSerializer(obj.reports.all(), many=True, context=self.context).data
 
 
 class IdentitySerializer(serializers.ModelSerializer):
@@ -64,13 +90,13 @@ class IdentitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Identity
         fields = [
-            'id', 'full_name', 'ssn', 'date_of_birth', 'gender',
+            'id', 'entity_id', 'full_name', 'ssn', 'date_of_birth', 'gender',
             'addresses', 'name_variations', 'phones', 'ref_accounts',
             'notes', 'expected_fico_range',
             'dd_status', 'report_count', 'reports_by_bureau',
             'created_by_username', 'created_at',
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ['id', 'entity_id', 'created_at']
 
     def get_report_count(self, obj):
         return obj.reports.count()
@@ -128,9 +154,10 @@ class IdentityDetailSerializer(IdentitySerializer):
     from reports.serializers import CreditReportSerializer
     reports = serializers.SerializerMethodField()
     comparisons = ComparisonResultSerializer(many=True, read_only=True)
+    dd_runs = DDRunSerializer(many=True, read_only=True)
 
     class Meta(IdentitySerializer.Meta):
-        fields = IdentitySerializer.Meta.fields + ['reports', 'comparisons']
+        fields = IdentitySerializer.Meta.fields + ['reports', 'comparisons', 'dd_runs']
 
     def get_reports(self, obj):
         from reports.serializers import CreditReportSerializer

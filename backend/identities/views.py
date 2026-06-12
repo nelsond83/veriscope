@@ -3,14 +3,17 @@ import io
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult
-from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun
+from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer, DDRunSerializer
 from .services import run_comparison, auto_match_and_compare
+
+BUREAU_ABBR = {'equifax': 'EQ', 'experian': 'EX', 'transunion': 'TU'}
 
 
 class IdentityViewSet(viewsets.ModelViewSet):
@@ -197,6 +200,104 @@ class IdentityViewSet(viewsets.ModelViewSet):
 
         return Response({'detail': 'Report assigned.'})
 
+
+    @action(detail=True, methods=['post'], url_path='clear-dd')
+    def clear_dd(self, request, pk=None):
+        identity = self.get_object()
+        comparisons = list(identity.comparisons.select_related('report').all())
+        active_reports = list(identity.reports.all())
+
+        if not comparisons and not active_reports:
+            return Response({'detail': 'No active DD to clear.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dd_run = DDRun.objects.create(
+            identity=identity,
+            results_snapshot=ComparisonResultSerializer(comparisons, many=True).data,
+        )
+        dd_run.reports.set(active_reports)
+
+        identity.comparisons.all().delete()
+        identity.reports.update(identity=None, status='archived')
+
+        return Response({'detail': 'DD archived and cleared.', 'run_id': str(dd_run.id)})
+
+    @action(detail=False, methods=['post'], url_path='clear-all-dd')
+    def clear_all_dd(self, request):
+        from reports.models import CreditReport
+        identities = Identity.objects.prefetch_related('comparisons', 'reports').all()
+        cleared = 0
+        for identity in identities:
+            comparisons = list(identity.comparisons.select_related('report').all())
+            active_reports = list(identity.reports.all())
+            if not comparisons and not active_reports:
+                continue
+            dd_run = DDRun.objects.create(
+                identity=identity,
+                results_snapshot=ComparisonResultSerializer(comparisons, many=True).data,
+            )
+            dd_run.reports.set(active_reports)
+            identity.comparisons.all().delete()
+            identity.reports.update(identity=None, status='archived')
+            cleared += 1
+        return Response({'detail': f'Cleared DD for {cleared} identities.'})
+
+    def _build_issues(self, comparisons):
+        issues = []
+        for comp in comparisons:
+            if comp.match_status not in ('mismatch', 'missing', 'partial'):
+                continue
+            bureau = BUREAU_ABBR.get(comp.report.bureau, comp.report.bureau[:2].upper())
+            fn = comp.field_name
+            if fn == 'account_missing':
+                issues.append(f'Account not in report: {comp.identity_value} [{bureau}]')
+            elif fn == 'account_unknown':
+                issues.append(f'Extra account in report: {comp.report_value} [{bureau}]')
+            elif fn == 'address_missing':
+                issues.append(f'Address not in report: {comp.identity_value} [{bureau}]')
+            elif fn == 'address_unknown':
+                issues.append(f'Extra address in report: {comp.report_value} [{bureau}]')
+            else:
+                label = fn.replace('_', ' ').title()
+                s = {'mismatch': 'mismatch', 'missing': 'not in report', 'partial': 'partial match'}.get(comp.match_status, comp.match_status)
+                issues.append(f'{label} {s} [{bureau}]')
+        return '; '.join(issues) if issues else 'CLEAR'
+
+    def _write_export_rows(self, writer, identities):
+        writer.writerow(['Entity', 'First Name', 'Last Name', 'SSN', 'Current Address', 'Issue'])
+        for identity in identities:
+            parts = identity.full_name.split()
+            first = parts[0] if parts else ''
+            last = parts[-1] if len(parts) > 1 else ''
+            current_addr = identity.addresses.filter(address_type='current').first()
+            addr_str = ''
+            if current_addr:
+                addr_str = ', '.join(filter(None, [
+                    current_addr.street,
+                    current_addr.city,
+                    current_addr.state,
+                    current_addr.zip_code,
+                ]))
+            issues = self._build_issues(identity.comparisons.select_related('report').all())
+            writer.writerow([identity.entity_id, first, last, identity.ssn, addr_str, issues])
+
+    @action(detail=True, methods=['get'], url_path='export-dd')
+    def export_dd_single(self, request, pk=None):
+        identity = self.get_object()
+        output = io.StringIO()
+        self._write_export_rows(csv.writer(output), [identity])
+        resp = HttpResponse(output.getvalue(), content_type='text/csv')
+        safe_name = identity.full_name.replace(' ', '_')
+        resp['Content-Disposition'] = f'attachment; filename="dd_{safe_name}.csv"'
+        return resp
+
+    @action(detail=False, methods=['get'], url_path='export-dd')
+    def export_dd_all(self, request):
+        identities = Identity.objects.prefetch_related('addresses', 'comparisons__report').all()
+        output = io.StringIO()
+        self._write_export_rows(csv.writer(output), identities)
+        resp = HttpResponse(output.getvalue(), content_type='text/csv')
+        resp['Content-Disposition'] = 'attachment; filename="dd_export.csv"'
+        return resp
 
     @action(detail=False, methods=['post'], url_path='reset-all')
     def reset_all(self, request):
