@@ -21,9 +21,29 @@
       </q-card-section>
     </q-card>
 
-    <!-- Loading -->
-    <div v-if="loading" class="text-center q-pa-xl">
-      <q-spinner color="primary" size="40px" />
+    <!-- Loading skeleton -->
+    <div v-if="loading">
+      <q-card v-for="n in 3" :key="n" class="vs-card q-mb-lg">
+        <q-card-section class="row items-center no-wrap q-pb-sm" style="gap:14px">
+          <q-skeleton type="circle" size="32px" />
+          <div class="col">
+            <q-skeleton type="text" width="45%" class="q-mb-xs" />
+            <q-skeleton type="text" width="25%" />
+          </div>
+          <q-skeleton type="QBadge" width="70px" />
+        </q-card-section>
+        <q-separator dark />
+        <q-card-section class="row q-col-gutter-md q-pb-sm">
+          <div v-for="i in 3" :key="i" class="col-xs-12 col-sm-4">
+            <q-skeleton type="text" width="50%" class="q-mb-xs" />
+            <q-skeleton type="text" width="70%" />
+          </div>
+        </q-card-section>
+        <q-separator dark />
+        <q-card-section>
+          <q-skeleton type="QInput" class="full-width" />
+        </q-card-section>
+      </q-card>
     </div>
 
     <!-- Unmatched report cards -->

@@ -22,10 +22,34 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-if="!report" class="text-center text-grey-6 q-pa-xl">
-      <q-spinner color="primary" size="40px" />
-    </div>
+    <!-- Loading skeleton -->
+    <template v-if="!report">
+      <div class="row q-col-gutter-md q-mb-lg">
+        <div v-for="n in 3" :key="n" class="col-xs-12 col-md-4">
+          <q-skeleton type="text" width="140px" class="q-mb-sm" />
+          <q-card class="vs-card">
+            <q-card-section class="q-py-sm">
+              <div v-for="i in 3" :key="i" class="parsed-field">
+                <q-skeleton type="text" width="80px" />
+                <q-skeleton type="text" width="50%" />
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+      <q-skeleton type="text" width="220px" class="q-mb-sm" />
+      <q-card class="vs-card">
+        <q-card-section>
+          <div v-for="n in 4" :key="n" class="row items-center q-py-sm" style="gap:16px">
+            <q-skeleton type="text" width="20%" />
+            <q-skeleton type="text" width="15%" />
+            <q-skeleton type="text" width="15%" />
+            <q-skeleton type="QBadge" width="60px" />
+            <q-skeleton type="text" width="10%" />
+          </div>
+        </q-card-section>
+      </q-card>
+    </template>
 
     <!-- Failed -->
     <div v-else-if="report.status === 'failed'" class="vs-card q-pa-lg text-negative">

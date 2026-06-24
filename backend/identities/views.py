@@ -1,8 +1,11 @@
 import csv
 import io
+import json
+import zipfile
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -13,7 +16,62 @@ from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPh
 from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer, DDRunSerializer
 from .services import run_comparison, auto_match_and_compare
 
-BUREAU_ABBR = {'equifax': 'EQ', 'experian': 'EX', 'transunion': 'TU'}
+ISSUE_TYPE_LABELS = {
+    'mismatch': 'Mismatch',
+    'missing': 'Missing from Report',
+    'partial': 'Partial Match',
+}
+
+
+def _serializable(data):
+    """Convert DRF serializer output (which may contain UUID/date objects) to plain JSON-safe types."""
+    return json.loads(json.dumps(list(data), cls=DjangoJSONEncoder))
+
+
+def _correction_row(identity, comp):
+    """One row for a corrections CSV: Entity, Name, SSN, Field, Report Value, Correct Value, Issue Type."""
+    fn = comp.field_name
+    if fn == 'account_missing':
+        return [identity.entity_id, identity.full_name, identity.ssn, 'Account', '—', comp.identity_value or '—', 'Missing from Report']
+    if fn == 'account_unknown':
+        return [identity.entity_id, identity.full_name, identity.ssn, 'Account', comp.report_value or '—', '—', 'Not on File']
+    if fn == 'address_missing':
+        return [identity.entity_id, identity.full_name, identity.ssn, 'Address', '—', comp.identity_value or '—', 'Missing from Report']
+    if fn == 'address_unknown':
+        return [identity.entity_id, identity.full_name, identity.ssn, 'Address', comp.report_value or '—', '—', 'Not on File']
+    field = fn.replace('_', ' ').title()
+    issue = ISSUE_TYPE_LABELS.get(comp.match_status, comp.match_status.title())
+    return [identity.entity_id, identity.full_name, identity.ssn, field, comp.report_value or '—', comp.identity_value or '—', issue]
+
+
+def _corrections_csv(rows):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Entity', 'Name', 'SSN', 'Field', 'Report Value', 'Correct Value', 'Issue Type'])
+    for row in rows:
+        writer.writerow(row)
+    return output.getvalue()
+
+
+def _build_corrections_zip(identities):
+    """Builds a ZIP with one CSV per bureau, each containing correction rows for every
+    identity passed in that has issues against that bureau's report."""
+    by_bureau = {}
+    for identity in identities:
+        for comp in identity.comparisons.all():
+            if comp.match_status not in ('mismatch', 'missing', 'partial'):
+                continue
+            bureau = comp.report.bureau
+            by_bureau.setdefault(bureau, []).append(_correction_row(identity, comp))
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        if not by_bureau:
+            zf.writestr('no_corrections.txt', 'No corrections found — all fields are clear.')
+        for bureau, rows in by_bureau.items():
+            zf.writestr(f'corrections_{bureau}.csv', _corrections_csv(rows))
+    buf.seek(0)
+    return buf.getvalue()
 
 
 class IdentityViewSet(viewsets.ModelViewSet):
@@ -212,7 +270,7 @@ class IdentityViewSet(viewsets.ModelViewSet):
 
         dd_run = DDRun.objects.create(
             identity=identity,
-            results_snapshot=ComparisonResultSerializer(comparisons, many=True).data,
+            results_snapshot=_serializable(ComparisonResultSerializer(comparisons, many=True).data),
         )
         dd_run.reports.set(active_reports)
 
@@ -233,7 +291,7 @@ class IdentityViewSet(viewsets.ModelViewSet):
                 continue
             dd_run = DDRun.objects.create(
                 identity=identity,
-                results_snapshot=ComparisonResultSerializer(comparisons, many=True).data,
+                results_snapshot=_serializable(ComparisonResultSerializer(comparisons, many=True).data),
             )
             dd_run.reports.set(active_reports)
             identity.comparisons.all().delete()
@@ -241,62 +299,21 @@ class IdentityViewSet(viewsets.ModelViewSet):
             cleared += 1
         return Response({'detail': f'Cleared DD for {cleared} identities.'})
 
-    def _build_issues(self, comparisons):
-        issues = []
-        for comp in comparisons:
-            if comp.match_status not in ('mismatch', 'missing', 'partial'):
-                continue
-            bureau = BUREAU_ABBR.get(comp.report.bureau, comp.report.bureau[:2].upper())
-            fn = comp.field_name
-            if fn == 'account_missing':
-                issues.append(f'Account not in report: {comp.identity_value} [{bureau}]')
-            elif fn == 'account_unknown':
-                issues.append(f'Extra account in report: {comp.report_value} [{bureau}]')
-            elif fn == 'address_missing':
-                issues.append(f'Address not in report: {comp.identity_value} [{bureau}]')
-            elif fn == 'address_unknown':
-                issues.append(f'Extra address in report: {comp.report_value} [{bureau}]')
-            else:
-                label = fn.replace('_', ' ').title()
-                s = {'mismatch': 'mismatch', 'missing': 'not in report', 'partial': 'partial match'}.get(comp.match_status, comp.match_status)
-                issues.append(f'{label} {s} [{bureau}]')
-        return '; '.join(issues) if issues else 'CLEAR'
-
-    def _write_export_rows(self, writer, identities):
-        writer.writerow(['Entity', 'First Name', 'Last Name', 'SSN', 'Current Address', 'Issue'])
-        for identity in identities:
-            parts = identity.full_name.split()
-            first = parts[0] if parts else ''
-            last = parts[-1] if len(parts) > 1 else ''
-            current_addr = identity.addresses.filter(address_type='current').first()
-            addr_str = ''
-            if current_addr:
-                addr_str = ', '.join(filter(None, [
-                    current_addr.street,
-                    current_addr.city,
-                    current_addr.state,
-                    current_addr.zip_code,
-                ]))
-            issues = self._build_issues(identity.comparisons.select_related('report').all())
-            writer.writerow([identity.entity_id, first, last, identity.ssn, addr_str, issues])
-
     @action(detail=True, methods=['get'], url_path='export-dd')
     def export_dd_single(self, request, pk=None):
         identity = self.get_object()
-        output = io.StringIO()
-        self._write_export_rows(csv.writer(output), [identity])
-        resp = HttpResponse(output.getvalue(), content_type='text/csv')
+        zip_bytes = _build_corrections_zip([identity])
+        resp = HttpResponse(zip_bytes, content_type='application/zip')
         safe_name = identity.full_name.replace(' ', '_')
-        resp['Content-Disposition'] = f'attachment; filename="dd_{safe_name}.csv"'
+        resp['Content-Disposition'] = f'attachment; filename="corrections_{safe_name}.zip"'
         return resp
 
     @action(detail=False, methods=['get'], url_path='export-dd')
     def export_dd_all(self, request):
-        identities = Identity.objects.prefetch_related('addresses', 'comparisons__report').all()
-        output = io.StringIO()
-        self._write_export_rows(csv.writer(output), identities)
-        resp = HttpResponse(output.getvalue(), content_type='text/csv')
-        resp['Content-Disposition'] = 'attachment; filename="dd_export.csv"'
+        identities = Identity.objects.prefetch_related('comparisons__report').all()
+        zip_bytes = _build_corrections_zip(identities)
+        resp = HttpResponse(zip_bytes, content_type='application/zip')
+        resp['Content-Disposition'] = 'attachment; filename="corrections_all_bureaus.zip"'
         return resp
 
     @action(detail=False, methods=['post'], url_path='reset-all')

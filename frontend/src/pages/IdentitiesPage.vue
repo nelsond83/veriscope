@@ -12,13 +12,39 @@
         :label="`Filter: ${activeFilter}`"
         class="q-mr-sm"
         @remove="router.push({ name: 'identities' })" />
-      <q-btn flat unelevated icon="download" label="Export All" class="q-mr-sm" @click="exportAll" />
+      <q-btn flat unelevated icon="download" label="Export Corrections" class="q-mr-sm" @click="exportAll" />
       <q-btn flat unelevated icon="restart_alt" label="Clear All DD" color="warning" class="q-mr-sm" @click="confirmClearAll = true" />
       <q-btn flat unelevated icon="upload" label="Import CSV" class="q-mr-sm" @click="showImport = true" />
       <q-btn unelevated color="primary" icon="person_add" label="Add Identity" @click="showCreate = true" />
     </div>
 
-    <q-card class="vs-card col column">
+    <q-card v-if="loading && !identities.length" class="vs-card col column">
+      <q-list separator>
+        <q-item v-for="n in 8" :key="n">
+          <q-item-section>
+            <q-skeleton type="text" width="40%" />
+          </q-item-section>
+          <q-item-section>
+            <q-skeleton type="text" width="30%" />
+          </q-item-section>
+          <q-item-section>
+            <q-skeleton type="text" width="30%" />
+          </q-item-section>
+          <q-item-section>
+            <div class="row no-wrap justify-center gap-xs">
+              <q-skeleton type="circle" size="22px" />
+              <q-skeleton type="circle" size="22px" />
+              <q-skeleton type="circle" size="22px" />
+            </div>
+          </q-item-section>
+          <q-item-section>
+            <q-skeleton type="QBadge" width="70px" />
+          </q-item-section>
+        </q-item>
+      </q-list>
+    </q-card>
+
+    <q-card v-else class="vs-card col column">
       <q-table
         :rows="filteredIdentities"
         :columns="columns"
@@ -358,7 +384,7 @@ async function exportAll() {
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'dd_export.csv'
+    a.download = 'corrections_all_bureaus.zip'
     a.click()
     URL.revokeObjectURL(url)
   } catch {

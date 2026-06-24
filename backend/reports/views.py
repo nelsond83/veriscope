@@ -25,7 +25,7 @@ class CreditReportViewSet(viewsets.ModelViewSet):
         if identity_id:
             qs = qs.filter(identity_id=identity_id)
         if unmatched == '1':
-            qs = qs.filter(identity__isnull=True)
+            qs = qs.filter(identity__isnull=True).exclude(status='archived')
         return qs
 
     @action(detail=False, methods=['post'], url_path='upload')

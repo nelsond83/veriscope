@@ -3,25 +3,43 @@
     <div class="text-h5 text-weight-bold text-white q-mb-xs">Dashboard</div>
     <div class="text-caption text-grey-6 q-mb-lg">Overview of your due diligence activity</div>
 
+    <!-- Stat cards -->
     <div class="row q-gutter-md q-mb-xl">
-      <div v-for="stat in stats" :key="stat.label" class="col-xs-12 col-sm-6 col-md-3">
-        <q-card class="vs-card stat-card" :class="{ 'stat-card--clickable': stat.to }"
-          @click="stat.to ? router.push(stat.to) : null">
-          <q-card-section>
-            <div class="row items-center no-wrap">
-              <div class="col">
-                <div class="text-caption text-grey-5 text-uppercase q-mb-xs" style="letter-spacing:1px">
-                  {{ stat.label }}
+      <template v-if="loading">
+        <div v-for="n in 3" :key="n" class="col-xs-12 col-sm-6 col-md-3">
+          <q-card class="vs-card stat-card">
+            <q-card-section>
+              <div class="row items-center no-wrap">
+                <div class="col">
+                  <q-skeleton type="text" width="70px" class="q-mb-sm" />
+                  <q-skeleton type="text" width="50px" height="32px" />
                 </div>
-                <div class="text-h4 text-weight-bold" :style="{ color: stat.color }">
-                  {{ stat.value }}
-                </div>
+                <q-skeleton type="circle" size="36px" class="q-ml-md" />
               </div>
-              <q-icon :name="stat.icon" size="36px" :style="{ color: stat.color }" class="q-ml-md" />
-            </div>
-          </q-card-section>
-        </q-card>
-      </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </template>
+      <template v-else>
+        <div v-for="stat in stats" :key="stat.label" class="col-xs-12 col-sm-6 col-md-3">
+          <q-card class="vs-card stat-card" :class="{ 'stat-card--clickable': stat.to }"
+            @click="stat.to ? router.push(stat.to) : null">
+            <q-card-section>
+              <div class="row items-center no-wrap">
+                <div class="col">
+                  <div class="text-caption text-grey-5 text-uppercase q-mb-xs" style="letter-spacing:1px">
+                    {{ stat.label }}
+                  </div>
+                  <div class="text-h4 text-weight-bold" :style="{ color: stat.color }">
+                    {{ stat.value }}
+                  </div>
+                </div>
+                <q-icon :name="stat.icon" size="36px" :style="{ color: stat.color }" class="q-ml-md" />
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </template>
     </div>
 
     <div class="row q-gutter-lg">
@@ -29,7 +47,21 @@
       <div class="col-xs-12 col-md-7">
         <div class="text-subtitle1 text-weight-medium text-white q-mb-md">Recent Reports</div>
         <q-card class="vs-card">
-          <q-list separator>
+          <q-list v-if="loading" separator>
+            <q-item v-for="n in 5" :key="n">
+              <q-item-section avatar>
+                <q-skeleton type="circle" size="28px" />
+              </q-item-section>
+              <q-item-section>
+                <q-skeleton type="text" width="55%" class="q-mb-xs" />
+                <q-skeleton type="text" width="35%" />
+              </q-item-section>
+              <q-item-section side>
+                <q-skeleton type="QBadge" width="60px" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-list v-else separator>
             <q-item v-if="!recentReports.length">
               <q-item-section class="text-grey-6 text-center q-py-lg">No reports uploaded yet</q-item-section>
             </q-item>
@@ -54,7 +86,17 @@
       <div class="col">
         <div class="text-subtitle1 text-weight-medium text-white q-mb-md">Flagged Identities</div>
         <q-card class="vs-card">
-          <q-list separator>
+          <q-list v-if="loading" separator>
+            <q-item v-for="n in 3" :key="n">
+              <q-item-section>
+                <q-skeleton type="text" width="65%" />
+              </q-item-section>
+              <q-item-section side>
+                <q-skeleton type="QBadge" width="55px" />
+              </q-item-section>
+            </q-item>
+          </q-list>
+          <q-list v-else separator>
             <q-item v-if="!flaggedIdentities.length">
               <q-item-section class="text-grey-6 text-center q-py-lg">No flags</q-item-section>
             </q-item>
@@ -81,6 +123,7 @@ import { api } from 'boot/axios'
 import BureauBadge from 'components/BureauBadge.vue'
 
 const router = useRouter()
+const loading = ref(true)
 const recentReports = ref([])
 const flaggedIdentities = ref([])
 
@@ -94,6 +137,7 @@ const statusColor = (s) => ({ parsed: 'positive', failed: 'negative', parsing: '
 const formatDate = (d) => d ? new Date(d).toLocaleDateString() : ''
 
 onMounted(async () => {
+  loading.value = true
   try {
     const [identitiesRes, reportsRes, unmatchedRes] = await Promise.all([
       api.get('/identities/'),
@@ -112,6 +156,8 @@ onMounted(async () => {
     stats.value[2].value = unmatchedReports.length
   } catch (e) {
     console.error(e)
+  } finally {
+    loading.value = false
   }
 })
 </script>

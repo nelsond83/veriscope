@@ -6,6 +6,65 @@
       <span class="text-caption text-grey-6">Identities</span>
     </div>
 
+    <!-- Loading skeleton -->
+    <template v-if="loading && !identity">
+      <q-card class="vs-card q-mb-xl">
+        <q-card-section>
+          <div class="row items-start justify-between no-wrap q-mb-md">
+            <div>
+              <q-skeleton type="text" width="220px" height="28px" class="q-mb-xs" />
+              <q-skeleton type="text" width="160px" />
+            </div>
+            <div class="row items-center" style="gap:8px">
+              <q-skeleton type="QBadge" width="70px" />
+              <q-skeleton type="circle" size="28px" />
+              <q-skeleton type="circle" size="28px" />
+            </div>
+          </div>
+          <div class="row q-col-gutter-md q-mb-sm">
+            <div v-for="n in 4" :key="n" class="col-xs-6 col-sm-3">
+              <q-skeleton type="text" width="60%" class="q-mb-xs" />
+              <q-skeleton type="text" width="85%" />
+            </div>
+          </div>
+          <div class="row q-col-gutter-md">
+            <div class="col-xs-6 col-sm-3">
+              <q-skeleton type="text" width="60%" class="q-mb-xs" />
+              <q-skeleton type="text" width="75%" />
+            </div>
+            <div class="col-xs-6 col-sm-5">
+              <q-skeleton type="text" width="60%" class="q-mb-xs" />
+              <q-skeleton type="QBadge" width="90px" />
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
+      <q-skeleton type="text" width="160px" height="24px" class="q-mb-md" />
+      <div class="row q-col-gutter-md q-mb-xl">
+        <div v-for="n in 3" :key="n" class="col-xs-12 col-md-4">
+          <q-card class="vs-card column full-height">
+            <q-card-section class="row items-center no-wrap q-pb-sm" style="gap:8px">
+              <q-skeleton type="QBadge" width="90px" />
+              <q-space />
+              <q-skeleton type="QBadge" width="60px" />
+            </q-card-section>
+            <q-separator dark />
+            <q-card-section>
+              <div v-for="i in 4" :key="i" class="q-py-md">
+                <q-skeleton type="text" width="40%" class="q-mb-xs" />
+                <div class="row items-center" style="gap:5px">
+                  <q-skeleton type="circle" size="15px" />
+                  <q-skeleton type="text" width="55%" />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
     <!-- Identity reference card -->
     <q-card class="vs-card q-mb-xl" v-if="identity">
       <q-card-section>
@@ -161,8 +220,8 @@
     <div class="row items-center q-mb-md">
       <div class="text-subtitle1 text-weight-medium text-white">DD Report Card</div>
       <q-space />
-      <q-btn flat dense icon="download" label="Export" size="sm" class="q-mr-sm" @click="exportDD" />
-      <q-btn flat dense icon="restart_alt" label="Clear DD" size="sm" color="warning"
+      <q-btn unelevated icon="download" label="Export Corrections" class="q-mr-sm" @click="exportDD" />
+      <q-btn unelevated icon="restart_alt" label="Clear DD" color="warning"
         :disable="!identity?.comparisons?.length && !identity?.reports?.length"
         @click="showClearDD = true" />
     </div>
@@ -495,11 +554,12 @@
         </q-list>
       </q-card>
     </template>
+    </template>
 
-    <!-- DD History -->
+    <!-- Archived DD Runs -->
     <template v-if="identity?.dd_runs?.length">
       <div class="row items-center q-mb-md q-mt-xl">
-        <div class="text-subtitle1 text-weight-medium text-grey-5">DD History</div>
+        <div class="text-subtitle1 text-weight-medium text-grey-5">Archived DD Runs</div>
         <q-badge :label="identity.dd_runs.length" color="grey-7" class="q-ml-sm" />
       </div>
       <div class="q-mb-xl">
@@ -727,6 +787,7 @@ const identity = ref(null)
 const reports = ref([])
 const comparisons = ref([])
 const unmatched = ref([])
+const loading = ref(true)
 const assigning = ref(null)
 const showEdit = ref(false)
 const showDelete = ref(false)
@@ -987,15 +1048,20 @@ const matchTextColor = (s) => ({ match: '#34C759', mismatch: '#FF6B6B', partial:
 const matchIcon = (s) => ({ match: 'check_circle', mismatch: 'cancel', partial: 'change_circle', missing: 'help' }[s] || 'help')
 
 async function load() {
-  const id = route.params.id
-  const [idRes, unmatchedRes] = await Promise.all([
-    api.get(`/identities/${id}/`),
-    api.get('/reports/', { params: { unmatched: '1' } }),
-  ])
-  identity.value = idRes.data
-  reports.value = idRes.data.reports || []
-  comparisons.value = idRes.data.comparisons || []
-  unmatched.value = unmatchedRes.data.results || unmatchedRes.data
+  loading.value = true
+  try {
+    const id = route.params.id
+    const [idRes, unmatchedRes] = await Promise.all([
+      api.get(`/identities/${id}/`),
+      api.get('/reports/', { params: { unmatched: '1' } }),
+    ])
+    identity.value = idRes.data
+    reports.value = idRes.data.reports || []
+    comparisons.value = idRes.data.comparisons || []
+    unmatched.value = unmatchedRes.data.results || unmatchedRes.data
+  } finally {
+    loading.value = false
+  }
 }
 
 async function assignReport(reportId) {
@@ -1085,7 +1151,7 @@ async function exportDD() {
     const url = URL.createObjectURL(res.data)
     const a = document.createElement('a')
     a.href = url
-    a.download = `dd_${identity.value?.full_name?.replace(/\s+/g, '_') || 'export'}.csv`
+    a.download = `corrections_${identity.value?.full_name?.replace(/\s+/g, '_') || 'export'}.zip`
     a.click()
     URL.revokeObjectURL(url)
   } catch {
