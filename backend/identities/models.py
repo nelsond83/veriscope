@@ -178,16 +178,11 @@ class Correction(models.Model):
         ('experian', 'Experian'),
         ('transunion', 'TransUnion'),
     ]
-    SOURCE_CHOICES = [
-        ('auto', 'Auto-detected'),
-        ('manual', 'Manual'),
-    ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     identity = models.ForeignKey(Identity, on_delete=models.CASCADE, related_name='corrections')
     bureau = models.CharField(max_length=20, choices=BUREAU_CHOICES)
     note = models.CharField(max_length=500, blank=True)
-    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='auto')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

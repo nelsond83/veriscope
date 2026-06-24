@@ -352,6 +352,3 @@ class CorrectionViewSet(viewsets.ModelViewSet):
         if bureau:
             qs = qs.filter(bureau=bureau)
         return qs
-
-    def perform_create(self, serializer):
-        serializer.save(source='manual')

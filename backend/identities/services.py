@@ -294,10 +294,7 @@ def sync_corrections(identity: Identity):
     for comp in bad_results:
         bureau = comp.report.bureau
         note = comparison_to_correction_note(comp)
-        Correction.objects.get_or_create(
-            identity=identity, bureau=bureau, note=note,
-            defaults={'source': 'auto'},
-        )
+        Correction.objects.get_or_create(identity=identity, bureau=bureau, note=note)
 
 
 def auto_match_and_compare(report) -> tuple:

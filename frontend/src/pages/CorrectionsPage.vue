@@ -6,6 +6,7 @@
         <div class="text-caption text-grey-6">Active corrections for this session, grouped by bureau</div>
       </div>
       <q-space />
+      <q-btn flat unelevated icon="download" label="Export Corrections" class="q-mr-sm" @click="exportCorrections" />
       <q-btn unelevated color="primary" icon="add" label="Add Correction" @click="openAddDialog" />
     </div>
 
@@ -59,13 +60,6 @@
               <q-input v-model="scope.value" type="textarea" autogrow dense autofocus dark filled
                 @keyup.enter.stop="scope.set" />
             </q-popup-edit>
-          </q-td>
-        </template>
-
-        <template #body-cell-source="props">
-          <q-td :props="props">
-            <q-badge :label="props.value === 'manual' ? 'Manual' : 'Auto'"
-              :color="props.value === 'manual' ? 'blue-grey-7' : 'grey-8'" />
           </q-td>
         </template>
 
@@ -137,7 +131,6 @@ const columns = [
   { name: 'identity_ssn', label: 'SSN', field: 'identity_ssn', align: 'left' },
   { name: 'identity_current_address', label: 'Current Address', field: 'identity_current_address', align: 'left' },
   { name: 'note', label: 'Correction', field: 'note', align: 'left' },
-  { name: 'source', label: 'Source', field: 'source', align: 'center' },
   { name: 'actions', label: '', field: 'actions', align: 'right' },
 ]
 
@@ -203,6 +196,20 @@ async function deleteCorrection(row) {
     $q.notify({ type: 'positive', message: 'Correction deleted.' })
   } catch {
     $q.notify({ type: 'negative', message: 'Failed to delete correction.' })
+  }
+}
+
+async function exportCorrections() {
+  try {
+    const res = await api.get('/identities/export-dd/', { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'corrections_all_bureaus.zip'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    $q.notify({ type: 'negative', message: 'Export failed.' })
   }
 }
 

@@ -61,10 +61,10 @@ class CorrectionSerializer(serializers.ModelSerializer):
         model = Correction
         fields = [
             'id', 'identity', 'identity_entity_id', 'identity_first_name', 'identity_last_name',
-            'identity_ssn', 'identity_current_address', 'bureau', 'note', 'source',
+            'identity_ssn', 'identity_current_address', 'bureau', 'note',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'source', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def get_identity_first_name(self, obj):
         parts = obj.identity.full_name.split()

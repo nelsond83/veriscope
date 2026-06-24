@@ -488,7 +488,6 @@
                   <div style="flex:1; min-width:0">
                     <div class="row items-center" style="gap:6px; flex-wrap:wrap">
                       <span style="font-size:0.79rem; color:#EBEBED">{{ corr.note }}</span>
-                      <q-badge v-if="corr.source === 'manual'" dense label="Manual" color="blue-grey-7" style="font-size:0.55rem" />
                     </div>
                   </div>
                   <div class="row items-center no-wrap" style="gap:2px">
