@@ -178,13 +178,6 @@ class Correction(models.Model):
         ('experian', 'Experian'),
         ('transunion', 'TransUnion'),
     ]
-    ISSUE_TYPE_CHOICES = [
-        ('mismatch', 'Mismatch'),
-        ('missing', 'Missing from Report'),
-        ('partial', 'Partial Match'),
-        ('not_on_file', 'Not on File'),
-        ('other', 'Other'),
-    ]
     SOURCE_CHOICES = [
         ('auto', 'Auto-detected'),
         ('manual', 'Manual'),
@@ -193,19 +186,16 @@ class Correction(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     identity = models.ForeignKey(Identity, on_delete=models.CASCADE, related_name='corrections')
     bureau = models.CharField(max_length=20, choices=BUREAU_CHOICES)
-    field = models.CharField(max_length=100)
-    report_value = models.CharField(max_length=500, blank=True)
-    correct_value = models.CharField(max_length=500, blank=True)
-    issue_type = models.CharField(max_length=20, choices=ISSUE_TYPE_CHOICES, default='other')
+    note = models.CharField(max_length=500, blank=True)
     source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='auto')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['bureau', 'field']
+        ordering = ['bureau', '-created_at']
 
     def __str__(self):
-        return f'{self.field} correction for {self.identity} [{self.bureau}]'
+        return f'Correction for {self.identity} [{self.bureau}]'
 
 
 class ComparisonResult(models.Model):

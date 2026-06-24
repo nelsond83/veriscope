@@ -25,7 +25,7 @@ def _serializable(data):
 def _corrections_csv(rows):
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Entity', 'Name', 'SSN', 'Field', 'Report Value', 'Correct Value', 'Issue Type'])
+    writer.writerow(['Entity', 'First Name', 'Last Name', 'SSN', 'Current Address', 'Correction'])
     for row in rows:
         writer.writerow(row)
     return output.getvalue()
@@ -36,11 +36,17 @@ def _build_corrections_zip(identities):
     for every identity passed in (reflects user edits/additions/deletions)."""
     by_bureau = {}
     for identity in identities:
+        name_parts = identity.full_name.split()
+        first = name_parts[0] if name_parts else ''
+        last = name_parts[-1] if len(name_parts) > 1 else ''
+        current_addr = identity.addresses.filter(address_type='current').first()
+        addr_str = ''
+        if current_addr:
+            addr_str = ', '.join(filter(None, [
+                current_addr.street, current_addr.city, current_addr.state, current_addr.zip_code,
+            ]))
         for corr in identity.corrections.all():
-            row = [
-                identity.entity_id, identity.full_name, identity.ssn, corr.field,
-                corr.report_value or '—', corr.correct_value or '—', corr.get_issue_type_display(),
-            ]
+            row = [identity.entity_id, first, last, identity.ssn, addr_str, corr.note]
             by_bureau.setdefault(corr.bureau, []).append(row)
 
     buf = io.BytesIO()
@@ -295,7 +301,7 @@ class IdentityViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='export-dd')
     def export_dd_all(self, request):
-        identities = Identity.objects.prefetch_related('corrections').all()
+        identities = Identity.objects.prefetch_related('corrections', 'addresses').all()
         zip_bytes = _build_corrections_zip(identities)
         resp = HttpResponse(zip_bytes, content_type='application/zip')
         resp['Content-Disposition'] = 'attachment; filename="corrections_all_bureaus.zip"'
@@ -334,7 +340,7 @@ class ComparisonResultViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class CorrectionViewSet(viewsets.ModelViewSet):
-    queryset = Correction.objects.select_related('identity').all()
+    queryset = Correction.objects.select_related('identity').prefetch_related('identity__addresses').all()
     serializer_class = CorrectionSerializer
 
     def get_queryset(self):

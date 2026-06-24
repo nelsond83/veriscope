@@ -487,15 +487,8 @@
                   <q-icon name="flag" size="14px" style="color:#FF9500; margin-top:2px; flex-shrink:0" />
                   <div style="flex:1; min-width:0">
                     <div class="row items-center" style="gap:6px; flex-wrap:wrap">
-                      <span style="font-size:0.79rem; color:#EBEBED; font-weight:600">{{ corr.field }}</span>
-                      <q-badge dense :label="corr.issue_type_display" color="dark" style="font-size:0.58rem" />
+                      <span style="font-size:0.79rem; color:#EBEBED">{{ corr.note }}</span>
                       <q-badge v-if="corr.source === 'manual'" dense label="Manual" color="blue-grey-7" style="font-size:0.55rem" />
-                    </div>
-                    <div style="font-size:0.72rem; color:#AAAAAE; margin-top:2px">
-                      Report: <span style="color:#D8D8DA">{{ corr.report_value || '—' }}</span>
-                    </div>
-                    <div style="font-size:0.72rem; color:#AAAAAE">
-                      Correct: <span style="color:#34C759">{{ corr.correct_value || '—' }}</span>
                     </div>
                   </div>
                   <div class="row items-center no-wrap" style="gap:2px">
@@ -521,14 +514,8 @@
           <div class="text-caption text-grey-6">{{ bureauLabel(correctionForm.bureau) }}</div>
         </q-card-section>
         <q-card-section class="q-pt-none">
-          <q-input v-model="correctionForm.field" label="Field" dark filled class="q-mb-sm"
-            :rules="[v => !!v || 'Required']" />
-          <q-select v-model="correctionForm.issue_type" :options="ISSUE_TYPES" label="Issue Type"
-            dark filled emit-value map-options class="q-mb-sm" />
-          <q-input v-model="correctionForm.report_value" label="Report Value" dark filled class="q-mb-sm"
-            hint="What the bureau report currently shows" />
-          <q-input v-model="correctionForm.correct_value" label="Correct Value" dark filled
-            hint="What it should be corrected to" />
+          <q-input v-model="correctionForm.note" label="Correction" type="textarea" autogrow
+            dark filled :rules="[v => !!v?.trim() || 'Required']" />
         </q-card-section>
         <q-card-actions align="right" class="q-px-md q-pb-md">
           <q-btn flat label="Cancel" v-close-popup />
@@ -864,15 +851,7 @@ const editForm = ref({})
 
 const showCorrectionDialog = ref(false)
 const savingCorrection = ref(false)
-const correctionForm = ref({ id: null, bureau: '', field: '', report_value: '', correct_value: '', issue_type: 'other' })
-
-const ISSUE_TYPES = [
-  { label: 'Mismatch', value: 'mismatch' },
-  { label: 'Missing from Report', value: 'missing' },
-  { label: 'Partial Match', value: 'partial' },
-  { label: 'Not on File', value: 'not_on_file' },
-  { label: 'Other', value: 'other' },
-]
+const correctionForm = ref({ id: null, bureau: '', note: '' })
 
 const BUREAUS = ['equifax', 'experian', 'transunion']
 
@@ -1252,21 +1231,18 @@ function bureauLabel(bureau) {
 function openCorrectionDialog(bureau, correction = null) {
   correctionForm.value = correction
     ? { ...correction }
-    : { id: null, bureau, field: '', report_value: '', correct_value: '', issue_type: 'other' }
+    : { id: null, bureau, note: '' }
   showCorrectionDialog.value = true
 }
 
 async function saveCorrection() {
-  if (!correctionForm.value.field?.trim()) return
+  if (!correctionForm.value.note?.trim()) return
   savingCorrection.value = true
   try {
     const payload = {
       identity: route.params.id,
       bureau: correctionForm.value.bureau,
-      field: correctionForm.value.field,
-      report_value: correctionForm.value.report_value,
-      correct_value: correctionForm.value.correct_value,
-      issue_type: correctionForm.value.issue_type,
+      note: correctionForm.value.note,
     }
     if (correctionForm.value.id) {
       await api.patch(`/corrections/${correctionForm.value.id}/`, payload)
@@ -1286,7 +1262,7 @@ async function saveCorrection() {
 function confirmDeleteCorrection(correction) {
   $q.dialog({
     title: 'Delete Correction?',
-    message: `Remove the "${correction.field}" correction? This cannot be undone.`,
+    message: 'Remove this correction? This cannot be undone.',
     ok: { label: 'Delete', color: 'negative', unelevated: true },
     cancel: { label: 'Cancel', flat: true },
     dark: true,

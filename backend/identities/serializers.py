@@ -51,15 +51,34 @@ class IdentityAccountSerializer(serializers.ModelSerializer):
 
 
 class CorrectionSerializer(serializers.ModelSerializer):
-    issue_type_display = serializers.CharField(source='get_issue_type_display', read_only=True)
+    identity_entity_id = serializers.CharField(source='identity.entity_id', read_only=True)
+    identity_first_name = serializers.SerializerMethodField()
+    identity_last_name = serializers.SerializerMethodField()
+    identity_ssn = serializers.CharField(source='identity.ssn', read_only=True)
+    identity_current_address = serializers.SerializerMethodField()
 
     class Meta:
         model = Correction
         fields = [
-            'id', 'identity', 'bureau', 'field', 'report_value', 'correct_value',
-            'issue_type', 'issue_type_display', 'source', 'created_at', 'updated_at',
+            'id', 'identity', 'identity_entity_id', 'identity_first_name', 'identity_last_name',
+            'identity_ssn', 'identity_current_address', 'bureau', 'note', 'source',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'source', 'created_at', 'updated_at']
+
+    def get_identity_first_name(self, obj):
+        parts = obj.identity.full_name.split()
+        return parts[0] if parts else ''
+
+    def get_identity_last_name(self, obj):
+        parts = obj.identity.full_name.split()
+        return parts[-1] if len(parts) > 1 else ''
+
+    def get_identity_current_address(self, obj):
+        addr = obj.identity.addresses.filter(address_type='current').first()
+        if not addr:
+            return ''
+        return ', '.join(filter(None, [addr.street, addr.city, addr.state, addr.zip_code]))
 
 
 class DDRunReportSerializer(serializers.Serializer):

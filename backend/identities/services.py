@@ -269,36 +269,34 @@ def run_comparison(identity: Identity, report) -> list:
     return results
 
 
-def comparison_to_correction_fields(comp):
-    """Maps a ComparisonResult onto the (field, report_value, correct_value, issue_type) shape
-    used by Correction rows."""
+def comparison_to_correction_note(comp):
+    """Renders a ComparisonResult issue as a single human-readable correction note."""
     fn = comp.field_name
     if fn == 'account_missing':
-        return 'Account', '', comp.identity_value or '', 'missing'
+        return f'Account not in report — should be on file: {comp.identity_value or "—"}'
     if fn == 'account_unknown':
-        return 'Account', comp.report_value or '', '', 'not_on_file'
+        return f'Account in report not on file: {comp.report_value or "—"}'
     if fn == 'address_missing':
-        return 'Address', '', comp.identity_value or '', 'missing'
+        return f'Address not in report — should be on file: {comp.identity_value or "—"}'
     if fn == 'address_unknown':
-        return 'Address', comp.report_value or '', '', 'not_on_file'
-    field = fn.replace('_', ' ').title()
-    issue_type = comp.match_status if comp.match_status in ('mismatch', 'missing', 'partial') else 'other'
-    return field, comp.report_value or '', comp.identity_value or '', issue_type
+        return f'Address in report not on file: {comp.report_value or "—"}'
+    label = fn.replace('_', ' ').title()
+    return f'{label}: report shows "{comp.report_value or "—"}", should be "{comp.identity_value or "—"}"'
 
 
 def sync_corrections(identity: Identity):
     """Ensure a Correction row exists for every current DD issue. Never overwrites or recreates
-    a correction the user has already dealt with (edited values are preserved; deleted ones stay
+    a correction the user has already dealt with (edited notes are preserved; deleted ones stay
     deleted unless the exact same issue is detected again on a later run)."""
     bad_results = identity.comparisons.select_related('report').filter(
         match_status__in=['mismatch', 'missing', 'partial']
     )
     for comp in bad_results:
         bureau = comp.report.bureau
-        field, report_val, correct_val, issue_type = comparison_to_correction_fields(comp)
+        note = comparison_to_correction_note(comp)
         Correction.objects.get_or_create(
-            identity=identity, bureau=bureau, field=field, report_value=report_val,
-            defaults={'correct_value': correct_val, 'issue_type': issue_type, 'source': 'auto'},
+            identity=identity, bureau=bureau, note=note,
+            defaults={'source': 'auto'},
         )
 
 
