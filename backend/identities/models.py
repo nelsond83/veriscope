@@ -148,6 +148,7 @@ class DDRun(models.Model):
     identity = models.ForeignKey(Identity, on_delete=models.CASCADE, related_name='dd_runs')
     created_at = models.DateTimeField(auto_now_add=True)
     results_snapshot = models.JSONField(default=list)
+    corrections_snapshot = models.JSONField(default=list)
     reports = models.ManyToManyField('reports.CreditReport', blank=True, related_name='dd_runs')
 
     class Meta:
@@ -166,6 +167,45 @@ class DDRun(models.Model):
         if statuses:
             return 'clear'
         return 'pending'
+
+
+class Correction(models.Model):
+    """Editable correction line for a specific bureau, shown/edited on the identity detail page
+    and included in the per-bureau corrections export. Seeded from ComparisonResult issues but
+    independently editable, addable, and deletable by the user."""
+    BUREAU_CHOICES = [
+        ('equifax', 'Equifax'),
+        ('experian', 'Experian'),
+        ('transunion', 'TransUnion'),
+    ]
+    ISSUE_TYPE_CHOICES = [
+        ('mismatch', 'Mismatch'),
+        ('missing', 'Missing from Report'),
+        ('partial', 'Partial Match'),
+        ('not_on_file', 'Not on File'),
+        ('other', 'Other'),
+    ]
+    SOURCE_CHOICES = [
+        ('auto', 'Auto-detected'),
+        ('manual', 'Manual'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey(Identity, on_delete=models.CASCADE, related_name='corrections')
+    bureau = models.CharField(max_length=20, choices=BUREAU_CHOICES)
+    field = models.CharField(max_length=100)
+    report_value = models.CharField(max_length=500, blank=True)
+    correct_value = models.CharField(max_length=500, blank=True)
+    issue_type = models.CharField(max_length=20, choices=ISSUE_TYPE_CHOICES, default='other')
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='auto')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['bureau', 'field']
+
+    def __str__(self):
+        return f'{self.field} correction for {self.identity} [{self.bureau}]'
 
 
 class ComparisonResult(models.Model):

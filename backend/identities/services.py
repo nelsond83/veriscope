@@ -1,5 +1,5 @@
 import re
-from .models import Identity, ComparisonResult
+from .models import Identity, ComparisonResult, Correction
 
 
 def _normalize_ssn(ssn: str) -> str:
@@ -265,7 +265,41 @@ def run_comparison(identity: Identity, report) -> list:
 
     ComparisonResult.objects.filter(identity=identity, report=report).delete()
     ComparisonResult.objects.bulk_create(results)
+    sync_corrections(identity)
     return results
+
+
+def comparison_to_correction_fields(comp):
+    """Maps a ComparisonResult onto the (field, report_value, correct_value, issue_type) shape
+    used by Correction rows."""
+    fn = comp.field_name
+    if fn == 'account_missing':
+        return 'Account', '', comp.identity_value or '', 'missing'
+    if fn == 'account_unknown':
+        return 'Account', comp.report_value or '', '', 'not_on_file'
+    if fn == 'address_missing':
+        return 'Address', '', comp.identity_value or '', 'missing'
+    if fn == 'address_unknown':
+        return 'Address', comp.report_value or '', '', 'not_on_file'
+    field = fn.replace('_', ' ').title()
+    issue_type = comp.match_status if comp.match_status in ('mismatch', 'missing', 'partial') else 'other'
+    return field, comp.report_value or '', comp.identity_value or '', issue_type
+
+
+def sync_corrections(identity: Identity):
+    """Ensure a Correction row exists for every current DD issue. Never overwrites or recreates
+    a correction the user has already dealt with (edited values are preserved; deleted ones stay
+    deleted unless the exact same issue is detected again on a later run)."""
+    bad_results = identity.comparisons.select_related('report').filter(
+        match_status__in=['mismatch', 'missing', 'partial']
+    )
+    for comp in bad_results:
+        bureau = comp.report.bureau
+        field, report_val, correct_val, issue_type = comparison_to_correction_fields(comp)
+        Correction.objects.get_or_create(
+            identity=identity, bureau=bureau, field=field, report_value=report_val,
+            defaults={'correct_value': correct_val, 'issue_type': issue_type, 'source': 'auto'},
+        )
 
 
 def auto_match_and_compare(report) -> tuple:

@@ -12,36 +12,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun
-from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer, DDRunSerializer
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun, Correction
+from .serializers import IdentitySerializer, IdentityDetailSerializer, ComparisonResultSerializer, DDRunSerializer, CorrectionSerializer
 from .services import run_comparison, auto_match_and_compare
-
-ISSUE_TYPE_LABELS = {
-    'mismatch': 'Mismatch',
-    'missing': 'Missing from Report',
-    'partial': 'Partial Match',
-}
 
 
 def _serializable(data):
     """Convert DRF serializer output (which may contain UUID/date objects) to plain JSON-safe types."""
     return json.loads(json.dumps(list(data), cls=DjangoJSONEncoder))
-
-
-def _correction_row(identity, comp):
-    """One row for a corrections CSV: Entity, Name, SSN, Field, Report Value, Correct Value, Issue Type."""
-    fn = comp.field_name
-    if fn == 'account_missing':
-        return [identity.entity_id, identity.full_name, identity.ssn, 'Account', '—', comp.identity_value or '—', 'Missing from Report']
-    if fn == 'account_unknown':
-        return [identity.entity_id, identity.full_name, identity.ssn, 'Account', comp.report_value or '—', '—', 'Not on File']
-    if fn == 'address_missing':
-        return [identity.entity_id, identity.full_name, identity.ssn, 'Address', '—', comp.identity_value or '—', 'Missing from Report']
-    if fn == 'address_unknown':
-        return [identity.entity_id, identity.full_name, identity.ssn, 'Address', comp.report_value or '—', '—', 'Not on File']
-    field = fn.replace('_', ' ').title()
-    issue = ISSUE_TYPE_LABELS.get(comp.match_status, comp.match_status.title())
-    return [identity.entity_id, identity.full_name, identity.ssn, field, comp.report_value or '—', comp.identity_value or '—', issue]
 
 
 def _corrections_csv(rows):
@@ -54,15 +32,16 @@ def _corrections_csv(rows):
 
 
 def _build_corrections_zip(identities):
-    """Builds a ZIP with one CSV per bureau, each containing correction rows for every
-    identity passed in that has issues against that bureau's report."""
+    """Builds a ZIP with one CSV per bureau, each containing the current Correction rows
+    for every identity passed in (reflects user edits/additions/deletions)."""
     by_bureau = {}
     for identity in identities:
-        for comp in identity.comparisons.all():
-            if comp.match_status not in ('mismatch', 'missing', 'partial'):
-                continue
-            bureau = comp.report.bureau
-            by_bureau.setdefault(bureau, []).append(_correction_row(identity, comp))
+        for corr in identity.corrections.all():
+            row = [
+                identity.entity_id, identity.full_name, identity.ssn, corr.field,
+                corr.report_value or '—', corr.correct_value or '—', corr.get_issue_type_display(),
+            ]
+            by_bureau.setdefault(corr.bureau, []).append(row)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -263,6 +242,7 @@ class IdentityViewSet(viewsets.ModelViewSet):
     def clear_dd(self, request, pk=None):
         identity = self.get_object()
         comparisons = list(identity.comparisons.select_related('report').all())
+        corrections = list(identity.corrections.all())
         active_reports = list(identity.reports.all())
 
         if not comparisons and not active_reports:
@@ -271,10 +251,12 @@ class IdentityViewSet(viewsets.ModelViewSet):
         dd_run = DDRun.objects.create(
             identity=identity,
             results_snapshot=_serializable(ComparisonResultSerializer(comparisons, many=True).data),
+            corrections_snapshot=_serializable(CorrectionSerializer(corrections, many=True).data),
         )
         dd_run.reports.set(active_reports)
 
         identity.comparisons.all().delete()
+        identity.corrections.all().delete()
         identity.reports.update(identity=None, status='archived')
 
         return Response({'detail': 'DD archived and cleared.', 'run_id': str(dd_run.id)})
@@ -282,19 +264,22 @@ class IdentityViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='clear-all-dd')
     def clear_all_dd(self, request):
         from reports.models import CreditReport
-        identities = Identity.objects.prefetch_related('comparisons', 'reports').all()
+        identities = Identity.objects.prefetch_related('comparisons', 'corrections', 'reports').all()
         cleared = 0
         for identity in identities:
             comparisons = list(identity.comparisons.select_related('report').all())
+            corrections = list(identity.corrections.all())
             active_reports = list(identity.reports.all())
             if not comparisons and not active_reports:
                 continue
             dd_run = DDRun.objects.create(
                 identity=identity,
                 results_snapshot=_serializable(ComparisonResultSerializer(comparisons, many=True).data),
+                corrections_snapshot=_serializable(CorrectionSerializer(corrections, many=True).data),
             )
             dd_run.reports.set(active_reports)
             identity.comparisons.all().delete()
+            identity.corrections.all().delete()
             identity.reports.update(identity=None, status='archived')
             cleared += 1
         return Response({'detail': f'Cleared DD for {cleared} identities.'})
@@ -310,7 +295,7 @@ class IdentityViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='export-dd')
     def export_dd_all(self, request):
-        identities = Identity.objects.prefetch_related('comparisons__report').all()
+        identities = Identity.objects.prefetch_related('corrections').all()
         zip_bytes = _build_corrections_zip(identities)
         resp = HttpResponse(zip_bytes, content_type='application/zip')
         resp['Content-Disposition'] = 'attachment; filename="corrections_all_bureaus.zip"'
@@ -346,3 +331,21 @@ class ComparisonResultViewSet(viewsets.ReadOnlyModelViewSet):
         if report_id:
             qs = qs.filter(report_id=report_id)
         return qs
+
+
+class CorrectionViewSet(viewsets.ModelViewSet):
+    queryset = Correction.objects.select_related('identity').all()
+    serializer_class = CorrectionSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        identity_id = self.request.query_params.get('identity')
+        bureau = self.request.query_params.get('bureau')
+        if identity_id:
+            qs = qs.filter(identity_id=identity_id)
+        if bureau:
+            qs = qs.filter(bureau=bureau)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(source='manual')

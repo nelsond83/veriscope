@@ -2,7 +2,7 @@ import csv
 import io
 from datetime import datetime
 from rest_framework import serializers
-from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun
+from .models import Identity, IdentityAddress, IdentityNameVariation, IdentityPhone, IdentityAccount, ComparisonResult, DDRun, Correction
 
 
 class ComparisonResultSerializer(serializers.ModelSerializer):
@@ -48,6 +48,18 @@ class IdentityAccountSerializer(serializers.ModelSerializer):
             'date_opened', 'account_address', 'order',
         ]
         read_only_fields = ['id']
+
+
+class CorrectionSerializer(serializers.ModelSerializer):
+    issue_type_display = serializers.CharField(source='get_issue_type_display', read_only=True)
+
+    class Meta:
+        model = Correction
+        fields = [
+            'id', 'identity', 'bureau', 'field', 'report_value', 'correct_value',
+            'issue_type', 'issue_type_display', 'source', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'source', 'created_at', 'updated_at']
 
 
 class DDRunReportSerializer(serializers.Serializer):
@@ -155,9 +167,10 @@ class IdentityDetailSerializer(IdentitySerializer):
     reports = serializers.SerializerMethodField()
     comparisons = ComparisonResultSerializer(many=True, read_only=True)
     dd_runs = DDRunSerializer(many=True, read_only=True)
+    corrections = CorrectionSerializer(many=True, read_only=True)
 
     class Meta(IdentitySerializer.Meta):
-        fields = IdentitySerializer.Meta.fields + ['reports', 'comparisons', 'dd_runs']
+        fields = IdentitySerializer.Meta.fields + ['reports', 'comparisons', 'dd_runs', 'corrections']
 
     def get_reports(self, obj):
         from reports.serializers import CreditReportSerializer

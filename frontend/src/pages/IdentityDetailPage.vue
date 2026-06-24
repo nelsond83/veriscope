@@ -466,11 +466,76 @@
                 </template>
               </div>
             </template>
+
+            <!-- Corrections: editable list of issues to send to this bureau -->
+            <q-separator dark />
+            <div class="q-pa-md">
+              <div class="row items-center q-mb-sm">
+                <div class="field-label">Corrections</div>
+                <q-badge v-if="correctionsFor(b).length" :label="correctionsFor(b).length" color="grey-7" class="q-ml-sm" />
+                <q-space />
+                <q-btn flat dense round icon="add" size="sm" color="primary" title="Add correction"
+                  @click="openCorrectionDialog(b)" />
+              </div>
+
+              <div v-if="!correctionsFor(b).length" style="font-size:0.75rem; color:#AAAAAE">
+                No corrections for this bureau.
+              </div>
+
+              <div v-for="corr in correctionsFor(b)" :key="corr.id" class="bureau-correction-row">
+                <div class="row items-start no-wrap" style="gap:7px">
+                  <q-icon name="flag" size="14px" style="color:#FF9500; margin-top:2px; flex-shrink:0" />
+                  <div style="flex:1; min-width:0">
+                    <div class="row items-center" style="gap:6px; flex-wrap:wrap">
+                      <span style="font-size:0.79rem; color:#EBEBED; font-weight:600">{{ corr.field }}</span>
+                      <q-badge dense :label="corr.issue_type_display" color="dark" style="font-size:0.58rem" />
+                      <q-badge v-if="corr.source === 'manual'" dense label="Manual" color="blue-grey-7" style="font-size:0.55rem" />
+                    </div>
+                    <div style="font-size:0.72rem; color:#AAAAAE; margin-top:2px">
+                      Report: <span style="color:#D8D8DA">{{ corr.report_value || '—' }}</span>
+                    </div>
+                    <div style="font-size:0.72rem; color:#AAAAAE">
+                      Correct: <span style="color:#34C759">{{ corr.correct_value || '—' }}</span>
+                    </div>
+                  </div>
+                  <div class="row items-center no-wrap" style="gap:2px">
+                    <q-btn flat round dense icon="edit" size="xs" color="grey-6"
+                      @click="openCorrectionDialog(b, corr)" />
+                    <q-btn flat round dense icon="delete" size="xs" color="negative"
+                      @click="confirmDeleteCorrection(corr)" />
+                  </div>
+                </div>
+              </div>
+            </div>
           </template>
 
         </q-card>
       </div>
     </div>
+
+    <!-- Add/Edit Correction dialog -->
+    <q-dialog v-model="showCorrectionDialog" persistent>
+      <q-card class="vs-card" style="min-width:380px; max-width:440px">
+        <q-card-section>
+          <div class="text-h6 text-white">{{ correctionForm.id ? 'Edit' : 'Add' }} Correction</div>
+          <div class="text-caption text-grey-6">{{ bureauLabel(correctionForm.bureau) }}</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <q-input v-model="correctionForm.field" label="Field" dark filled class="q-mb-sm"
+            :rules="[v => !!v || 'Required']" />
+          <q-select v-model="correctionForm.issue_type" :options="ISSUE_TYPES" label="Issue Type"
+            dark filled emit-value map-options class="q-mb-sm" />
+          <q-input v-model="correctionForm.report_value" label="Report Value" dark filled class="q-mb-sm"
+            hint="What the bureau report currently shows" />
+          <q-input v-model="correctionForm.correct_value" label="Correct Value" dark filled
+            hint="What it should be corrected to" />
+        </q-card-section>
+        <q-card-actions align="right" class="q-px-md q-pb-md">
+          <q-btn flat label="Cancel" v-close-popup />
+          <q-btn unelevated color="primary" label="Save" :loading="savingCorrection" @click="saveCorrection" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
 
     <!-- DD Run Timeline -->
     <div class="row items-center q-mb-md">
@@ -796,6 +861,18 @@ const saving = ref(false)
 const deleting = ref(false)
 const clearingDD = ref(false)
 const editForm = ref({})
+
+const showCorrectionDialog = ref(false)
+const savingCorrection = ref(false)
+const correctionForm = ref({ id: null, bureau: '', field: '', report_value: '', correct_value: '', issue_type: 'other' })
+
+const ISSUE_TYPES = [
+  { label: 'Mismatch', value: 'mismatch' },
+  { label: 'Missing from Report', value: 'missing' },
+  { label: 'Partial Match', value: 'partial' },
+  { label: 'Not on File', value: 'not_on_file' },
+  { label: 'Other', value: 'other' },
+]
 
 const BUREAUS = ['equifax', 'experian', 'transunion']
 
@@ -1164,6 +1241,68 @@ function bureauAbbr(reportId) {
   return r ? { equifax: 'EQ', experian: 'EX', transunion: 'TU' }[r.bureau] || r.bureau.slice(0, 2).toUpperCase() : '??'
 }
 
+function correctionsFor(bureau) {
+  return (identity.value?.corrections || []).filter(c => c.bureau === bureau)
+}
+
+function bureauLabel(bureau) {
+  return { equifax: 'Equifax', experian: 'Experian', transunion: 'TransUnion' }[bureau] || bureau
+}
+
+function openCorrectionDialog(bureau, correction = null) {
+  correctionForm.value = correction
+    ? { ...correction }
+    : { id: null, bureau, field: '', report_value: '', correct_value: '', issue_type: 'other' }
+  showCorrectionDialog.value = true
+}
+
+async function saveCorrection() {
+  if (!correctionForm.value.field?.trim()) return
+  savingCorrection.value = true
+  try {
+    const payload = {
+      identity: route.params.id,
+      bureau: correctionForm.value.bureau,
+      field: correctionForm.value.field,
+      report_value: correctionForm.value.report_value,
+      correct_value: correctionForm.value.correct_value,
+      issue_type: correctionForm.value.issue_type,
+    }
+    if (correctionForm.value.id) {
+      await api.patch(`/corrections/${correctionForm.value.id}/`, payload)
+    } else {
+      await api.post('/corrections/', payload)
+    }
+    showCorrectionDialog.value = false
+    $q.notify({ type: 'positive', message: 'Correction saved.' })
+    await load()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Failed to save correction.' })
+  } finally {
+    savingCorrection.value = false
+  }
+}
+
+function confirmDeleteCorrection(correction) {
+  $q.dialog({
+    title: 'Delete Correction?',
+    message: `Remove the "${correction.field}" correction? This cannot be undone.`,
+    ok: { label: 'Delete', color: 'negative', unelevated: true },
+    cancel: { label: 'Cancel', flat: true },
+    dark: true,
+  }).onOk(() => deleteCorrection(correction))
+}
+
+async function deleteCorrection(correction) {
+  try {
+    await api.delete(`/corrections/${correction.id}/`)
+    $q.notify({ type: 'positive', message: 'Correction deleted.' })
+    await load()
+  } catch {
+    $q.notify({ type: 'negative', message: 'Failed to delete correction.' })
+  }
+}
+
 function openArchivedPdf(archivedReport) {
   if (archivedReport.file_url) window.open(archivedReport.file_url, '_blank')
 }
@@ -1324,6 +1463,15 @@ onMounted(load)
 }
 
 .bureau-acct-row:last-child {
+  border-bottom: none;
+}
+
+.bureau-correction-row {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bureau-correction-row:last-child {
   border-bottom: none;
 }
 
